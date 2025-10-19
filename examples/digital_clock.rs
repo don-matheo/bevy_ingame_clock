@@ -3,7 +3,6 @@
 //! This example shows:
 //! - Digital time display with segment-style visualization
 //! - Date calendar display
-//! - Vintage digital clock styling
 //! - Interactive speed controls
 
 use bevy::prelude::*;
