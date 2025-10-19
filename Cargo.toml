@@ -1,0 +1,36 @@
+[package]
+name = "bevy_ingame_clock"
+version = "0.1.0"
+edition = "2021"
+authors = ["Donmatheo <dev@donmatheo.de>"]
+description = "An in-game clock plugin for the Bevy game engine"
+repository = "https://github.com/don-matheo/bevy_ingame_clock"
+license = "MIT OR Apache-2.0"
+keywords = ["bevy", "game", "clock", "time"]
+categories = ["game-development"]
+
+[dependencies]
+bevy = { version = "0.17", default-features = false }
+chrono = "0.4"
+
+[dev-dependencies]
+bevy = "0.17"
+
+[lib]
+name = "bevy_ingame_clock"
+path = "src/lib.rs"
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+required-features = []
+
+[[example]]
+name = "events"
+path = "examples/events.rs"
+required-features = []
+
+[[example]]
+name = "digital_clock"
+path = "examples/digital_clock.rs"
+required-features = []
