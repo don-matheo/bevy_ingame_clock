@@ -1,6 +1,6 @@
 # Bevy In-Game Clock
 
-A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-game clock system with date/time tracking, configurable speed, and flexible formatting.
+A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-game clock system with date/time tracking, configurable speed, sending events on time based intervals, and flexible formatting.
 
 ## Features
 
