@@ -317,6 +317,8 @@ cargo run --example digital_clock
 
 Visual digital clock display with vintage styling, showing time in digital format with a date calendar display.
 
+![Digital Clock Example](digital_clock.gif)
+
 **Controls:**
 - `Space` - Pause/Resume
 - `+/-` - Speed Up/Down
