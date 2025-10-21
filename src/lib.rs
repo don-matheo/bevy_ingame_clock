@@ -18,6 +18,279 @@
 
 use bevy::prelude::*;
 use chrono::{Datelike, Duration, NaiveDateTime, Timelike, Utc};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+/// Trait for implementing custom calendar systems
+///
+/// This trait provides default implementations for Gregorian calendar time units,
+/// which can be overridden by custom calendar implementations with different values.
+pub trait Calendar: Send + Sync {
+    /// Format the current date
+    fn format_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String;
+    
+    /// Format the current time
+    fn format_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String;
+    
+    /// Format the current date and time
+    fn format_datetime(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String;
+    
+    /// Get date components as (year, month, day)
+    fn get_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (i32, u32, u32);
+    
+    /// Get time components as (hour, minute, second)
+    fn get_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (u32, u32, u32);
+    
+    /// Get seconds per day for this calendar system
+    ///
+    /// Default: 86400 (24 hours × 60 minutes × 60 seconds - standard Gregorian day)
+    /// Custom calendars should override this to return their calculated value based on
+    /// hours_per_day and minutes_per_hour configuration.
+    fn seconds_per_day(&self) -> u32 {
+        86400
+    }
+    
+    /// Get seconds per hour for this calendar system
+    ///
+    /// Default: 3600 (60 minutes × 60 seconds - standard Gregorian hour)
+    /// Custom calendars should override this to return their calculated value based on
+    /// minutes_per_hour configuration.
+    fn seconds_per_hour(&self) -> u32 {
+        3600
+    }
+    
+    /// Get seconds per week for this calendar system
+    ///
+    /// Default: 604800 (7 days × 86400 seconds - standard Gregorian week)
+    /// Custom calendars should override this to return their calculated value based on
+    /// days_per_week configuration and seconds_per_day().
+    fn seconds_per_week(&self) -> u32 {
+        self.seconds_per_day() * 7
+    }
+}
+
+/// Default Gregorian calendar implementation using chrono
+#[derive(Debug, Clone)]
+pub struct GregorianCalendar;
+
+impl Calendar for GregorianCalendar {
+    fn format_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let dt = start_datetime + Duration::milliseconds((elapsed_seconds * 1000.0) as i64);
+        let fmt = format.unwrap_or("%Y-%m-%d");
+        dt.format(fmt).to_string()
+    }
+    
+    fn format_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let dt = start_datetime + Duration::milliseconds((elapsed_seconds * 1000.0) as i64);
+        let fmt = format.unwrap_or("%H:%M:%S");
+        dt.format(fmt).to_string()
+    }
+    
+    fn format_datetime(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let dt = start_datetime + Duration::milliseconds((elapsed_seconds * 1000.0) as i64);
+        let fmt = format.unwrap_or("%Y-%m-%d %H:%M:%S");
+        dt.format(fmt).to_string()
+    }
+    
+    fn get_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (i32, u32, u32) {
+        let dt = start_datetime + Duration::milliseconds((elapsed_seconds * 1000.0) as i64);
+        (dt.year(), dt.month(), dt.day())
+    }
+    
+    fn get_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (u32, u32, u32) {
+        let dt = start_datetime + Duration::milliseconds((elapsed_seconds * 1000.0) as i64);
+        (dt.hour(), dt.minute(), dt.second())
+    }
+}
+
+/// Month definition combining name and length
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Month {
+    pub name: String,
+    pub days: u32,
+}
+
+impl Month {
+    pub fn new(name: impl Into<String>, days: u32) -> Self {
+        Self {
+            name: name.into(),
+            days,
+        }
+    }
+}
+
+/// Era/Epoch definition for calendar system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Era {
+    pub name: String,
+    pub start_year: i64,
+}
+
+impl Era {
+    pub fn new(name: impl Into<String>, start_year: i64) -> Self {
+        Self {
+            name: name.into(),
+            start_year,
+        }
+    }
+}
+
+/// Custom calendar with fully configurable time units and structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomCalendar {
+    pub minutes_per_hour: u32,
+    pub hours_per_day: u32,
+    pub days_per_week: u32,
+    pub months: Vec<Month>,
+    pub weekday_names: Vec<String>,
+    pub era: Era,
+}
+
+impl CustomCalendar {
+    /// Create a new custom calendar with fully configurable units
+    /// The first weekday in the weekday_names list is considered day 0 of the week
+    pub fn new(
+        minutes_per_hour: u32,
+        hours_per_day: u32,
+        days_per_week: u32,
+        months: Vec<Month>,
+        weekday_names: Vec<String>,
+        era: Era,
+    ) -> Self {
+        assert_eq!(weekday_names.len(), days_per_week as usize, "Weekday names must match days_per_week");
+        assert!(!months.is_empty(), "Must have at least one month");
+        
+        Self {
+            minutes_per_hour,
+            hours_per_day,
+            days_per_week,
+            months,
+            weekday_names,
+            era,
+        }
+    }
+    
+    fn days_per_year(&self) -> u32 {
+        self.months.iter().map(|m| m.days).sum()
+    }
+    
+    fn seconds_per_minute(&self) -> u32 {
+        60 // Keep seconds at 60 for consistency
+    }
+    
+    /// Get the weekday name for the current elapsed time
+    fn get_weekday(&self, elapsed_seconds: f64) -> String {
+        let total_days = (elapsed_seconds / self.seconds_per_day() as f64).floor() as i64;
+        let weekday_index = (total_days % self.days_per_week as i64) as usize;
+        self.weekday_names[weekday_index].clone()
+    }
+}
+
+impl Calendar for CustomCalendar {
+    fn seconds_per_day(&self) -> u32 {
+        self.seconds_per_hour() * self.hours_per_day
+    }
+    
+    fn seconds_per_hour(&self) -> u32 {
+        self.seconds_per_minute() * self.minutes_per_hour
+    }
+    
+    fn seconds_per_week(&self) -> u32 {
+        self.seconds_per_day() * self.days_per_week
+    }
+    
+    fn get_date(&self, elapsed_seconds: f64, _start_datetime: NaiveDateTime) -> (i32, u32, u32) {
+        let total_days = (elapsed_seconds / self.seconds_per_day() as f64).floor() as i64;
+        let days_per_year = self.days_per_year() as i64;
+        
+        let years_since_epoch = total_days / days_per_year;
+        let year = self.era.start_year + years_since_epoch;
+        let day_of_year = (total_days % days_per_year) as u32;
+        
+        // Find which month and day within that month
+        let mut days_remaining = day_of_year;
+        let mut month = 1u32;
+        
+        for (idx, month_def) in self.months.iter().enumerate() {
+            if days_remaining < month_def.days {
+                month = (idx + 1) as u32;
+                break;
+            }
+            days_remaining -= month_def.days;
+        }
+        
+        let day = days_remaining + 1; // 1-indexed
+        
+        (year as i32, month, day)
+    }
+    
+    fn get_time(&self, elapsed_seconds: f64, _start_datetime: NaiveDateTime) -> (u32, u32, u32) {
+        let seconds_per_day = self.seconds_per_day() as f64;
+        let seconds_today = elapsed_seconds % seconds_per_day;
+        
+        let seconds_per_hour = self.seconds_per_hour() as f64;
+        let seconds_per_minute = self.seconds_per_minute() as f64;
+        
+        let hour = (seconds_today / seconds_per_hour).floor() as u32;
+        let remaining = seconds_today % seconds_per_hour;
+        let minute = (remaining / seconds_per_minute).floor() as u32;
+        let second = (remaining % seconds_per_minute).floor() as u32;
+        
+        (hour, minute, second)
+    }
+    
+    fn format_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let (year, month, day) = self.get_date(elapsed_seconds, start_datetime);
+        let weekday = self.get_weekday(elapsed_seconds);
+        
+        if let Some(fmt) = format {
+            // Simple custom format support
+            fmt.replace("%Y", &year.to_string())
+                .replace("%m", &format!("{:02}", month))
+                .replace("%d", &format!("{:02}", day))
+                .replace("%B", &self.months[(month - 1) as usize].name)
+                .replace("%E", &self.era.name)
+                .replace("%A", &weekday)
+        } else {
+            format!("{:04}-{:02}-{:02}", year, month, day)
+        }
+    }
+    
+    fn format_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let (hour, minute, second) = self.get_time(elapsed_seconds, start_datetime);
+        
+        if let Some(fmt) = format {
+            fmt.replace("%H", &format!("{:02}", hour))
+                .replace("%M", &format!("{:02}", minute))
+                .replace("%S", &format!("{:02}", second))
+        } else {
+            format!("{:02}:{:02}:{:02}", hour, minute, second)
+        }
+    }
+    
+    fn format_datetime(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        let date = self.format_date(elapsed_seconds, start_datetime, None);
+        let time = self.format_time(elapsed_seconds, start_datetime, None);
+        
+        if let Some(fmt) = format {
+            let (year, month, day) = self.get_date(elapsed_seconds, start_datetime);
+            let (hour, minute, second) = self.get_time(elapsed_seconds, start_datetime);
+            let weekday = self.get_weekday(elapsed_seconds);
+            
+            fmt.replace("%Y", &year.to_string())
+                .replace("%m", &format!("{:02}", month))
+                .replace("%d", &format!("{:02}", day))
+                .replace("%B", &self.months[(month - 1) as usize].name)
+                .replace("%E", &self.era.name)
+                .replace("%A", &weekday)
+                .replace("%H", &format!("{:02}", hour))
+                .replace("%M", &format!("{:02}", minute))
+                .replace("%S", &format!("{:02}", second))
+        } else {
+            format!("{} {}", date, time)
+        }
+    }
+}
 
 /// Event fired when a specific time interval has passed
 #[derive(Message, Debug, Clone)]
@@ -33,27 +306,27 @@ pub struct ClockIntervalEvent {
 pub enum ClockInterval {
     /// Every second
     Second,
-    /// Every minute (60 seconds)
+    /// Every minute
     Minute,
-    /// Every hour (3600 seconds)
+    /// Every hour
     Hour,
-    /// Every day (86400 seconds)
+    /// Every day
     Day,
-    /// Every week (7 days)
+    /// Every week
     Week,
     /// Custom interval in seconds
     Custom(u32),
 }
 
 impl ClockInterval {
-    /// Get the duration of this interval in seconds
-    pub fn as_seconds(&self) -> u32 {
+    /// Get the duration of this interval in seconds, based on the calendar
+    pub fn as_seconds(&self, calendar: &dyn Calendar) -> u32 {
         match self {
             ClockInterval::Second => 1,
             ClockInterval::Minute => 60,
-            ClockInterval::Hour => 3600,
-            ClockInterval::Day => 86400,
-            ClockInterval::Week => 604800,
+            ClockInterval::Hour => calendar.seconds_per_hour(),
+            ClockInterval::Day => calendar.seconds_per_day(),
+            ClockInterval::Week => calendar.seconds_per_week(),
             ClockInterval::Custom(seconds) => *seconds,
         }
     }
@@ -89,7 +362,7 @@ struct IntervalTracker {
 /// Resource that represents the in-game clock.
 ///
 /// This tracks the in-game time which can run at a different speed than real time.
-#[derive(Resource, Debug, Clone)]
+#[derive(Resource, Clone)]
 pub struct InGameClock {
     /// The elapsed in-game time in seconds since the start_datetime
     pub elapsed_seconds: f64,
@@ -99,6 +372,20 @@ pub struct InGameClock {
     pub paused: bool,
     /// The start date/time for the in-game clock
     pub start_datetime: NaiveDateTime,
+    /// The calendar system used for date/time calculations and formatting
+    calendar: Arc<dyn Calendar>,
+}
+
+impl std::fmt::Debug for InGameClock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InGameClock")
+            .field("elapsed_seconds", &self.elapsed_seconds)
+            .field("speed", &self.speed)
+            .field("paused", &self.paused)
+            .field("start_datetime", &self.start_datetime)
+            .field("calendar", &"<Calendar>")
+            .finish()
+    }
 }
 
 impl Default for InGameClock {
@@ -111,6 +398,7 @@ impl Default for InGameClock {
             speed: 1.0,
             paused: false,
             start_datetime: now,
+            calendar: Arc::new(GregorianCalendar),
         }
     }
 }
@@ -158,7 +446,14 @@ impl InGameClock {
             speed: 1.0,
             paused: false,
             start_datetime,
+            calendar: Arc::new(GregorianCalendar),
         }
+    }
+
+    /// Creates a new in-game clock with a custom calendar system
+    pub fn with_calendar(mut self, calendar: impl Calendar + 'static) -> Self {
+        self.calendar = Arc::new(calendar);
+        self
     }
 
     /// Sets the clock speed multiplier
@@ -168,6 +463,7 @@ impl InGameClock {
     }
 
     /// Sets the clock speed based on how many real-time seconds it takes for one in-game day to pass.
+    /// Takes into account the calendar's seconds_per_day value.
     ///
     /// # Examples
     /// ```
@@ -179,10 +475,11 @@ impl InGameClock {
     /// let clock = InGameClock::new().with_day_duration(1200.0);
     /// ```
     pub fn with_day_duration(mut self, real_seconds_per_day: f32) -> Self {
-        // One day = 86400 seconds
-        // If real_seconds_per_day = 60, then speed = 86400 / 60 = 1440
-        // This means the game runs 1440x faster than real time
-        self.speed = 86400.0 / real_seconds_per_day;
+        // Get the calendar's seconds per day
+        let calendar_seconds_per_day = self.calendar.seconds_per_day() as f32;
+        // If real_seconds_per_day = 60, then speed = calendar_seconds_per_day / 60
+        // This means the game runs (calendar_seconds_per_day / 60)x faster than real time
+        self.speed = calendar_seconds_per_day / real_seconds_per_day;
         self
     }
 
@@ -213,6 +510,7 @@ impl InGameClock {
     }
 
     /// Sets the clock speed based on how many real-time seconds it takes for one in-game day to pass.
+    /// Takes into account the calendar's seconds_per_day value.
     ///
     /// # Examples
     /// ```
@@ -226,12 +524,15 @@ impl InGameClock {
     /// clock.set_day_duration(1200.0);
     /// ```
     pub fn set_day_duration(&mut self, real_seconds_per_day: f32) {
-        self.speed = 86400.0 / real_seconds_per_day;
+        let calendar_seconds_per_day = self.calendar.seconds_per_day() as f32;
+        self.speed = calendar_seconds_per_day / real_seconds_per_day;
     }
 
     /// Gets the current day duration (how many real-time seconds it takes for one in-game day to pass)
+    /// Takes into account the calendar's seconds_per_day value.
     pub fn day_duration(&self) -> f32 {
-        86400.0 / self.speed
+        let calendar_seconds_per_day = self.calendar.seconds_per_day() as f32;
+        calendar_seconds_per_day / self.speed
     }
 
     /// Gets the current NaiveDateTime based on elapsed time
@@ -248,13 +549,12 @@ impl InGameClock {
 
     /// Gets the current date as (year, month, day)
     pub fn current_date(&self) -> (i32, u32, u32) {
-        let dt = self.current_datetime();
-        (dt.year(), dt.month(), dt.day())
+        self.calendar.get_date(self.elapsed_seconds, self.start_datetime)
     }
 
     /// Gets the current time as (hour, minute, second)
     pub fn current_time(&self) -> (u32, u32, u32) {
-        self.as_hms()
+        self.calendar.get_time(self.elapsed_seconds, self.start_datetime)
     }
 
     /// Formats the current date with an optional custom format string.
@@ -270,9 +570,7 @@ impl InGameClock {
     /// assert_eq!(clock.format_date(Some("%B %d, %Y")), "June 15, 2024");
     /// ```
     pub fn format_date(&self, format: Option<&str>) -> String {
-        let dt = self.current_datetime();
-        let fmt = format.unwrap_or("%Y-%m-%d");
-        dt.format(fmt).to_string()
+        self.calendar.format_date(self.elapsed_seconds, self.start_datetime, format)
     }
 
     /// Formats the current time with an optional custom format string.
@@ -288,9 +586,7 @@ impl InGameClock {
     /// assert_eq!(clock.format_time(Some("%H:%M")), "14:30");
     /// ```
     pub fn format_time(&self, format: Option<&str>) -> String {
-        let dt = self.current_datetime();
-        let fmt = format.unwrap_or("%H:%M:%S");
-        dt.format(fmt).to_string()
+        self.calendar.format_time(self.elapsed_seconds, self.start_datetime, format)
     }
 
     /// Formats the current date and time with an optional custom format string.
@@ -306,9 +602,12 @@ impl InGameClock {
     /// assert_eq!(clock.format_datetime(Some("%B %d, %Y at %I:%M %p")), "June 15, 2024 at 02:30 PM");
     /// ```
     pub fn format_datetime(&self, format: Option<&str>) -> String {
-        let dt = self.current_datetime();
-        let fmt = format.unwrap_or("%Y-%m-%d %H:%M:%S");
-        dt.format(fmt).to_string()
+        self.calendar.format_datetime(self.elapsed_seconds, self.start_datetime, format)
+    }
+
+    /// Get the calendar used by this clock
+    pub fn calendar(&self) -> &Arc<dyn Calendar> {
+        &self.calendar
     }
 }
 
@@ -330,7 +629,7 @@ fn check_intervals(
     }
 
     for tracker in &mut trackers.trackers {
-        let interval_seconds = tracker.interval.as_seconds() as f64;
+        let interval_seconds = tracker.interval.as_seconds(clock.calendar().as_ref()) as f64;
         
         // Check how many times this interval has passed
         let current_intervals = (clock.elapsed_seconds / interval_seconds).floor() as u64;
@@ -552,11 +851,31 @@ mod tests {
 
     #[test]
     fn test_clock_interval_as_seconds() {
-        assert_eq!(ClockInterval::Second.as_seconds(), 1);
-        assert_eq!(ClockInterval::Minute.as_seconds(), 60);
-        assert_eq!(ClockInterval::Hour.as_seconds(), 3600);
-        assert_eq!(ClockInterval::Day.as_seconds(), 86400);
-        assert_eq!(ClockInterval::Week.as_seconds(), 604800);
-        assert_eq!(ClockInterval::Custom(90).as_seconds(), 90);
+        let gregorian = GregorianCalendar;
+        assert_eq!(ClockInterval::Second.as_seconds(&gregorian), 1);
+        assert_eq!(ClockInterval::Minute.as_seconds(&gregorian), 60);
+        assert_eq!(ClockInterval::Hour.as_seconds(&gregorian), 3600);
+        assert_eq!(ClockInterval::Day.as_seconds(&gregorian), 86400);
+        assert_eq!(ClockInterval::Week.as_seconds(&gregorian), 604800);
+        assert_eq!(ClockInterval::Custom(90).as_seconds(&gregorian), 90);
+    }
+    
+    #[test]
+    fn test_custom_calendar_intervals() {
+        let custom_calendar = CustomCalendar::new(
+            60,  // minutes_per_hour
+            20,  // hours_per_day
+            5,   // days_per_week
+            vec![Month::new("Month1", 20)],
+            vec!["Day1".to_string(), "Day2".to_string(), "Day3".to_string(), "Day4".to_string(), "Day5".to_string()],
+            Era::new("Test Era", 0),
+        );
+        
+        assert_eq!(ClockInterval::Second.as_seconds(&custom_calendar), 1);
+        assert_eq!(ClockInterval::Minute.as_seconds(&custom_calendar), 60);
+        assert_eq!(ClockInterval::Hour.as_seconds(&custom_calendar), 3600); // 60 * 60
+        assert_eq!(ClockInterval::Day.as_seconds(&custom_calendar), 72000); // 20 * 60 * 60
+        assert_eq!(ClockInterval::Week.as_seconds(&custom_calendar), 360000); // 72000 * 5
+        assert_eq!(ClockInterval::Custom(90).as_seconds(&custom_calendar), 90);
     }
 }

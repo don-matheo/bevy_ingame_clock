@@ -1,0 +1,30 @@
+// Fantasy Calendar Configuration
+// This file defines a custom calendar system for a fantasy world
+(
+    minutes_per_hour: 20,
+    hours_per_day: 8,
+    days_per_week: 5,
+    months: [
+        (name: "Frostmoon", days: 20),
+        (name: "Thawmoon", days: 21),
+        (name: "Bloomtide", days: 19),
+        (name: "Greentide", days: 20),
+        (name: "Suntide", days: 21),
+        (name: "Harvestmoon", days: 20),
+        (name: "Goldmoon", days: 21),
+        (name: "Fallmoon", days: 20),
+        (name: "Darkmoon", days: 21),
+        (name: "Icemoon", days: 18),
+    ],
+    weekday_names: [
+        "Moonday",
+        "Fireday",
+        "Waterday",
+        "Earthday",
+        "Starday",
+    ],
+    era: (
+        name: "Age of Magic",
+        start_year: 1000,
+    ),
+)

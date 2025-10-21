@@ -11,6 +11,7 @@ A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-
 - 🎨 **Flexible Formatting** - Default or custom datetime formats using chrono
 - 📆 **Date Calculations** - Automatic handling of months, years, and leap years via chrono
 - ⚙️ **Event System** - Receive Bevy events at configurable intervals (hourly, daily, custom)
+- 🗓️ **Custom Calendars** - Support for non-Gregorian calendars (fantasy worlds, sci-fi settings)
 - 🎮 **Simple Integration** - Easy to use with Bevy's ECS
 
 ## Compatibility
@@ -161,6 +162,7 @@ fn custom_formats(clock: Res<InGameClock>) {
 - `%p` - AM/PM
 - `%B` - Full month name
 - `%A` - Full weekday name
+- `%E` - Era name (for custom calendars only)
 - See [chrono format docs](https://docs.rs/chrono/latest/chrono/format/strftime/index.html) for more
 
 ### Interval Events
@@ -210,6 +212,164 @@ fn handle_events(mut events: MessageReader<ClockIntervalEvent>) {
 - `ClockInterval::Day` - Every 86400 in-game seconds
 - `ClockInterval::Week` - Every 7 in-game days
 - `ClockInterval::Custom(seconds)` - Custom interval in seconds
+
+### Custom Calendars
+
+The plugin supports custom calendar systems for fantasy or sci-fi games with non-Gregorian time structures.
+
+#### Loading from RON Configuration
+
+The recommended way to configure a custom calendar is using a RON file:
+
+```ron
+// fantasy_calendar.ron
+// The first weekday in weekday_names list is considered day 0 of the week
+(
+    minutes_per_hour: 60,
+    hours_per_day: 20,
+    days_per_week: 5,
+    months: [
+        (name: "Frostmoon", days: 20),
+        (name: "Thawmoon", days: 20),
+        (name: "Bloomtide", days: 20),
+        (name: "Greentide", days: 20),
+        (name: "Suntide", days: 20),
+        (name: "Harvestmoon", days: 20),
+        (name: "Goldmoon", days: 20),
+        (name: "Fallmoon", days: 20),
+        (name: "Darkmoon", days: 20),
+        (name: "Icemoon", days: 20),
+    ],
+    weekday_names: [
+        "Moonday",
+        "Fireday",
+        "Waterday",
+        "Earthday",
+        "Starday",
+    ],
+    era: (
+        name: "Age of Magic",
+        start_year: 1000,
+    ),
+)
+```
+
+```rust
+use bevy_ingame_clock::{InGameClock, CustomCalendar};
+use std::fs;
+
+fn setup(mut commands: Commands) {
+    // Load calendar configuration from RON file
+    let config = fs::read_to_string("fantasy_calendar.ron")
+        .expect("Failed to read calendar config");
+    
+    let custom_calendar: CustomCalendar = ron::from_str(&config)
+        .expect("Failed to parse calendar config");
+
+    // Use the custom calendar
+    let clock = InGameClock::new()
+        .with_calendar(custom_calendar)
+        .with_day_duration(60.0);
+
+    commands.insert_resource(clock);
+}
+
+fn display_time(clock: Res<InGameClock>) {
+    // Format with custom month names
+    let custom_format = clock.format_datetime(Some("Year %Y, %B %d - %H:%M:%S"));
+    println!("{}", custom_format);
+    // Output: "Year 1000, Frostmoon 01 - 00:00:00"
+    
+    // Format with era name
+    let era_format = clock.format_datetime(Some("%E Year %Y, %B %d - %H:%M:%S"));
+    println!("{}", era_format);
+    // Output: "Age of Magic Year 1000, Frostmoon 01 - 00:00:00"
+}
+```
+
+**Configuration Options:**
+- `minutes_per_hour`: Number of minutes in an hour
+- `hours_per_day`: Number of hours in a day
+- `days_per_week`: Number of days in a week
+- `months`: Array of month definitions, each with a `name` and `days` count (allows irregular months)
+- `weekday_names`: Names for each day of the week (must match days_per_week). The first name in the list is day 0 of the week
+- `era`: Era/Epoch definition with:
+  - `name`: Name of the era (e.g., "Age of Magic", "Common Era")
+  - `start_year`: Starting year for the calendar system
+
+#### Programmatic Configuration
+
+You can also create calendars programmatically:
+
+```rust
+use bevy_ingame_clock::{InGameClock, CustomCalendar, Month, Era};
+
+fn setup(mut commands: Commands) {
+    let custom_calendar = CustomCalendar::new(
+        60,  // minutes_per_hour
+        20,  // hours_per_day (instead of 24)
+        5,   // days_per_week (instead of 7)
+        vec![
+            Month::new("Frostmoon", 20),
+            Month::new("Thawmoon", 20),
+            Month::new("Bloomtide", 20),
+            // ... more months
+        ],
+        vec![
+            "Moonday".to_string(),    // Day 0 of the week
+            "Fireday".to_string(),
+            "Waterday".to_string(),
+            // ... more weekday names (must match days_per_week)
+        ],
+        Era::new("Age of Magic", 1000),
+    );
+
+    let clock = InGameClock::new()
+        .with_calendar(custom_calendar)
+        .with_day_duration(60.0);
+
+    commands.insert_resource(clock);
+}
+```
+
+**Creating Your Own Calendar:**
+
+Implement the [`Calendar`](src/lib.rs:25) trait to create fully custom calendar systems:
+
+```rust
+use bevy_ingame_clock::Calendar;
+use chrono::NaiveDateTime;
+
+struct MyCustomCalendar {
+    // Your custom calendar data
+}
+
+impl Calendar for MyCustomCalendar {
+    fn format_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        // Your custom date formatting logic
+    }
+    
+    fn format_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        // Your custom time formatting logic
+    }
+    
+    fn format_datetime(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
+        // Your custom datetime formatting logic
+    }
+    
+    fn get_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (i32, u32, u32) {
+        // Return (year, month, day)
+    }
+    
+    fn get_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (u32, u32, u32) {
+        // Return (hour, minute, second)
+    }
+    
+    fn seconds_per_day(&self) -> u32 {
+        // Return seconds per day (default: 86400)
+    }
+}
+```
 
 ## API Reference
 
@@ -318,6 +478,26 @@ cargo run --example digital_clock
 Visual digital clock display with vintage styling, showing time in digital format with a date calendar display.
 
 ![Digital Clock Example](digital_clock.gif)
+
+**Controls:**
+- `Space` - Pause/Resume
+- `+/-` - Speed Up/Down
+- `R` - Reset clock
+
+### Custom Calendar Example
+
+```bash
+cargo run --example custom_calendar
+```
+
+Demonstrates implementing and using a custom fantasy calendar system loaded from a RON file with:
+- 60 minutes per hour
+- 20 hours per day
+- 5 days per week (first day: Moonday)
+- 10 months per year with configurable lengths (20 days each in the example)
+- Custom month definitions combining names and lengths (Frostmoon, Thawmoon, Bloomtide, etc.)
+- Custom weekday names (Moonday, Fireday, Waterday, etc.) - first name in list is day 0
+- Era definition: "Age of Magic" starting at year 1000
 
 **Controls:**
 - `Space` - Pause/Resume
