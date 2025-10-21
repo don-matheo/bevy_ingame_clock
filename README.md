@@ -208,10 +208,12 @@ fn handle_events(mut events: MessageReader<ClockIntervalEvent>) {
 **Available Intervals:**
 - `ClockInterval::Second` - Every in-game second
 - `ClockInterval::Minute` - Every 60 in-game seconds
-- `ClockInterval::Hour` - Every 3600 in-game seconds
-- `ClockInterval::Day` - Every 86400 in-game seconds
-- `ClockInterval::Week` - Every 7 in-game days
+- `ClockInterval::Hour` - Every hour (duration depends on calendar: 3600s for Gregorian, configurable for custom calendars)
+- `ClockInterval::Day` - Every day (duration depends on calendar: 86400s for Gregorian, configurable for custom calendars)
+- `ClockInterval::Week` - Every week (duration depends on calendar: 604800s for Gregorian, configurable for custom calendars)
 - `ClockInterval::Custom(seconds)` - Custom interval in seconds
+
+**Note:** When using custom calendars, the Hour, Day, and Week intervals automatically adjust to match the calendar's configured time units. For example, with a 20-hour day, the Day interval fires every 72000 seconds instead of 86400.
 
 ### Custom Calendars
 
@@ -366,7 +368,15 @@ impl Calendar for MyCustomCalendar {
     }
     
     fn seconds_per_day(&self) -> u32 {
-        // Return seconds per day (default: 86400)
+        // Return seconds per day (default: 86400 for Gregorian)
+    }
+    
+    fn seconds_per_hour(&self) -> u32 {
+        // Return seconds per hour (default: 3600 for Gregorian)
+    }
+    
+    fn seconds_per_week(&self) -> u32 {
+        // Return seconds per week (default: 604800 for Gregorian)
     }
 }
 ```
