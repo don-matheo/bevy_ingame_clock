@@ -95,7 +95,7 @@ fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
                 println!("🌅 A day has passed! (Day count: {})", event.count);
             },
             ClockInterval::Week => {
-                println!("🌅 A week has passed! (Week count: {})", event.count);
+                println!("🗓️ A week has passed! (Week count: {})", event.count);
             },
             _ => {}
         }
