@@ -18,7 +18,7 @@ A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-
 
 | Bevy Version | Plugin Version |
 |--------------|----------------|
-| 0.17         | 0.1            |
+| 0.17         | 0.2            |
 
 ## Installation
 
@@ -27,7 +27,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 bevy = "0.17"
-bevy_ingame_clock = "0.1"
+bevy_ingame_clock = "0.2"
 ```
 
 ## Quick Start

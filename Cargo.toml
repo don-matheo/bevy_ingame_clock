@@ -1,6 +1,6 @@
 [package]
 name = "bevy_ingame_clock"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Donmatheo <dev@donmatheo.de>"]
 description = "An in-game clock plugin for the Bevy game engine"
