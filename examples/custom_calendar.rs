@@ -84,6 +84,8 @@ fn setup(mut commands: Commands) {
 
     // Register interval to receive events when a day passes
     commands.register_clock_interval(ClockInterval::Day);
+    // Register interval to receive events when a week passes
+    commands.register_clock_interval(ClockInterval::Week);
 }
 
 fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
@@ -91,6 +93,9 @@ fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
         match event.interval {
             ClockInterval::Day => {
                 println!("🌅 A day has passed! (Day count: {})", event.count);
+            },
+            ClockInterval::Week => {
+                println!("🌅 A week has passed! (Week count: {})", event.count);
             },
             _ => {}
         }
