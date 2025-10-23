@@ -14,6 +14,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@7b1c307e0dcbda6122208f10795a713336a9b35a # stable
+        with:
+          toolchain: stable
 
       - name: Verify crate can be published
         run: cargo publish --dry-run
