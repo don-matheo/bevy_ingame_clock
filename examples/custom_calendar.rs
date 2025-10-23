@@ -10,7 +10,7 @@
 //! - R: Reset clock
 
 use bevy::prelude::*;
-use bevy_ingame_clock::{InGameClock, InGameClockPlugin, CustomCalendar};
+use bevy_ingame_clock::{ClockCommands, ClockInterval, ClockIntervalEvent, CustomCalendar, InGameClock, InGameClockPlugin};
 use std::fs;
 
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(InGameClockPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (display_time, handle_input))
+        .add_systems(Update, (display_time, handle_input, handle_clock_events))
         .run();
 }
 
@@ -81,6 +81,20 @@ fn setup(mut commands: Commands) {
         },
         ClockText,
     ));
+
+    // Register interval to receive events when a day passes
+    commands.register_clock_interval(ClockInterval::Day);
+}
+
+fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
+    for event in events.read() {
+        match event.interval {
+            ClockInterval::Day => {
+                println!("🌅 A day has passed! (Day count: {})", event.count);
+            },
+            _ => {}
+        }
+    }
 }
 
 fn display_time(
