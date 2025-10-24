@@ -113,6 +113,7 @@ fn display_time(
                 Date only:         {}\n\
                 Time only:         {}\n\
                 Components:        Year {}, Month {}, Day {} | {}:{:02}:{:02}\n\
+                is leap year:      {}\n\
                 \n\
                 Speed:             {:.1}x\n\
                 Day duration:      {:.1}s\n\
@@ -126,7 +127,13 @@ fn display_time(
                 custom_format,
                 date,
                 time,
-                year, month, day, hour, minute, second,
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                year % 2 == 0, // not best solution yet, but it works for now
                 clock.speed,
                 clock.day_duration()
             );

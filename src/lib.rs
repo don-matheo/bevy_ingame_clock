@@ -108,13 +108,15 @@ impl Calendar for GregorianCalendar {
 pub struct Month {
     pub name: String,
     pub days: u32,
+    pub leap_days: u32,
 }
 
 impl Month {
-    pub fn new(name: impl Into<String>, days: u32) -> Self {
+    pub fn new(name: impl Into<String>, days: u32, leap_days: u32) -> Self {
         Self {
             name: name.into(),
             days,
+            leap_days,
         }
     }
 }
@@ -143,6 +145,7 @@ pub struct CustomCalendar {
     pub days_per_week: u32,
     pub months: Vec<Month>,
     pub weekday_names: Vec<String>,
+    pub leap_years: i64,
     pub era: Era,
 }
 
@@ -155,6 +158,7 @@ impl CustomCalendar {
         days_per_week: u32,
         months: Vec<Month>,
         weekday_names: Vec<String>,
+        leap_years: i64,
         era: Era,
     ) -> Self {
         assert_eq!(weekday_names.len(), days_per_week as usize, "Weekday names must match days_per_week");
@@ -166,6 +170,7 @@ impl CustomCalendar {
             days_per_week,
             months,
             weekday_names,
+            leap_years,
             era,
         }
     }
@@ -206,17 +211,25 @@ impl Calendar for CustomCalendar {
         let years_since_epoch = total_days / days_per_year;
         let year = self.era.start_year + years_since_epoch;
         let day_of_year = (total_days % days_per_year) as u32;
-        
+        let is_leap_year = year % self.leap_years == 0;
         // Find which month and day within that month
         let mut days_remaining = day_of_year;
         let mut month = 1u32;
         
         for (idx, month_def) in self.months.iter().enumerate() {
-            if days_remaining < month_def.days {
-                month = (idx + 1) as u32;
-                break;
+            if is_leap_year {
+                if days_remaining < month_def.days + month_def.leap_days {
+                    month = (idx + 1) as u32;
+                    break;
+                }
+                days_remaining -= month_def.days + month_def.leap_days;
+            } else {
+                if days_remaining < month_def.days {
+                    month = (idx + 1) as u32;
+                    break;
+                }
+                days_remaining -= month_def.days;
             }
-            days_remaining -= month_def.days;
         }
         
         let day = days_remaining + 1; // 1-indexed
@@ -863,14 +876,21 @@ mod tests {
     #[test]
     fn test_custom_calendar_intervals() {
         let custom_calendar = CustomCalendar::new(
-            60,  // minutes_per_hour
-            20,  // hours_per_day
-            5,   // days_per_week
-            vec![Month::new("Month1", 20)],
-            vec!["Day1".to_string(), "Day2".to_string(), "Day3".to_string(), "Day4".to_string(), "Day5".to_string()],
+            60, // minutes_per_hour
+            20, // hours_per_day
+            5,  // days_per_week
+            vec![Month::new("Month1", 20, 0)],
+            vec![
+                "Day1".to_string(),
+                "Day2".to_string(),
+                "Day3".to_string(),
+                "Day4".to_string(),
+                "Day5".to_string(),
+            ],
+            0,
             Era::new("Test Era", 0),
         );
-        
+
         assert_eq!(ClockInterval::Second.as_seconds(&custom_calendar), 1);
         assert_eq!(ClockInterval::Minute.as_seconds(&custom_calendar), 60);
         assert_eq!(ClockInterval::Hour.as_seconds(&custom_calendar), 3600); // 60 * 60
