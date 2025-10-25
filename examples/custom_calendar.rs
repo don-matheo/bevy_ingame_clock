@@ -25,6 +25,9 @@ fn main() {
 #[derive(Component)]
 struct ClockText;
 
+#[derive(Resource)]
+struct CalendarResource(CustomCalendar);
+
 fn setup(mut commands: Commands) {
     // Camera
     commands.spawn(Camera2d);
@@ -45,13 +48,20 @@ fn setup(mut commands: Commands) {
     println!("  - {} hours per day", fantasy_calendar.hours_per_day);
     println!("  - {} days per week", fantasy_calendar.days_per_week);
     println!("  - Week starts with: {}", fantasy_calendar.weekday_names[0]);
+    println!("  - Leap year rule: {:?}", fantasy_calendar.leap_years);
     
     let total_days: u32 = fantasy_calendar.months.iter().map(|m| m.days).sum();
+    let total_leap_days: u32 = fantasy_calendar.months.iter().map(|m| m.leap_days).sum();
     println!("  - {} months with varying lengths", fantasy_calendar.months.len());
     for month in &fantasy_calendar.months {
-        println!("    - {}: {} days", month.name, month.days);
+        if month.leap_days > 0 {
+            println!("    - {}: {} days (+{} leap days)", month.name, month.days, month.leap_days);
+        } else {
+            println!("    - {}: {} days", month.name, month.days);
+        }
     }
-    println!("  - {} days per year", total_days);
+    println!("  - {} days per normal year", total_days);
+    println!("  - {} days per leap year", total_days + total_leap_days);
     println!("\nEra/Epoch:");
     println!("  - Name: {}", fantasy_calendar.era.name);
     println!("  - Starting year: {}", fantasy_calendar.era.start_year);
@@ -61,6 +71,10 @@ fn setup(mut commands: Commands) {
     println!("  +/-   - Speed Up/Down");
     println!("  R     - Reset clock");
     println!();
+
+    // Store calendar for leap year checking
+    let calendar_clone = fantasy_calendar.clone();
+    commands.insert_resource(CalendarResource(calendar_clone));
 
     // Create a clock with the fantasy calendar
     // One in-game day passes every 60 real seconds
@@ -104,6 +118,7 @@ fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
 
 fn display_time(
     clock: Res<InGameClock>,
+    calendar: Res<CalendarResource>,
     mut query: Query<&mut Text, With<ClockText>>,
 ) {
     if clock.is_changed() || query.iter().next().is_some() {
@@ -120,6 +135,9 @@ fn display_time(
             let (year, month, day) = clock.current_date();
             let (hour, minute, second) = clock.current_time();
             
+            // Check if current year is a leap year using the calendar's method
+            let is_leap = calendar.0.is_leap_year(year);
+            
             let status = if clock.paused { "PAUSED" } else { "RUNNING" };
             
             text.0 = format!(
@@ -132,7 +150,7 @@ fn display_time(
                 Date only:         {}\n\
                 Time only:         {}\n\
                 Components:        Year {}, Month {}, Day {} | {}:{:02}:{:02}\n\
-                is leap year:      {}\n\
+                Is leap year:      {}\n\
                 \n\
                 Speed:             {:.1}x\n\
                 Day duration:      {:.1}s\n\
@@ -152,7 +170,7 @@ fn display_time(
                 hour,
                 minute,
                 second,
-                year % 2 == 0, // not best solution yet, but it works for now
+                if is_leap { "Yes" } else { "No" },
                 clock.speed,
                 clock.day_duration()
             );

@@ -230,17 +230,18 @@ The recommended way to configure a custom calendar is using a RON file:
     minutes_per_hour: 60,
     hours_per_day: 20,
     days_per_week: 5,
+    leap_years: "# % 2 == 0",  // Leap year occurs every 2 years
     months: [
-        (name: "Frostmoon", days: 20),
-        (name: "Thawmoon", days: 20),
-        (name: "Bloomtide", days: 20),
-        (name: "Greentide", days: 20),
-        (name: "Suntide", days: 20),
-        (name: "Harvestmoon", days: 20),
-        (name: "Goldmoon", days: 20),
-        (name: "Fallmoon", days: 20),
-        (name: "Darkmoon", days: 20),
-        (name: "Icemoon", days: 20),
+        (name: "Frostmoon", days: 20, leap_days: 3),   // 20 days normally, 23 in leap years
+        (name: "Thawmoon", days: 21, leap_days: 0),    // Always 21 days
+        (name: "Bloomtide", days: 19, leap_days: 2),   // 19 days normally, 21 in leap years
+        (name: "Greentide", days: 20, leap_days: 0),   // Always 20 days
+        (name: "Suntide", days: 21, leap_days: 0),     // Always 21 days
+        (name: "Harvestmoon", days: 20, leap_days: 0), // Always 20 days
+        (name: "Goldmoon", days: 21, leap_days: 0),    // Always 21 days
+        (name: "Fallmoon", days: 20, leap_days: 0),    // Always 20 days
+        (name: "Darkmoon", days: 21, leap_days: 0),    // Always 21 days
+        (name: "Icemoon", days: 18, leap_days: 2),     // 18 days normally, 20 in leap years
     ],
     weekday_names: [
         "Moonday",
@@ -293,93 +294,54 @@ fn display_time(clock: Res<InGameClock>) {
 - `minutes_per_hour`: Number of minutes in an hour
 - `hours_per_day`: Number of hours in a day
 - `days_per_week`: Number of days in a week
-- `months`: Array of month definitions, each with a `name` and `days` count (allows irregular months)
+- `leap_years`: Leap year expression - a boolean expression using `#` as the year placeholder (see Leap Year System below)
+- `months`: Array of month definitions, each with:
+  - `name`: Month name
+  - `days`: Base number of days in the month
+  - `leap_days`: Additional days added during leap years (allows distributing leap days across months)
 - `weekday_names`: Names for each day of the week (must match days_per_week). The first name in the list is day 0 of the week
 - `era`: Era/Epoch definition with:
   - `name`: Name of the era (e.g., "Age of Magic", "Common Era")
   - `start_year`: Starting year for the calendar system
 
-#### Programmatic Configuration
+**Leap Year System:**
 
-You can also create calendars programmatically:
+The leap year system uses boolean expressions to define when leap years occur. The `leap_years` field accepts a string expression using `#` as a placeholder for the year value.
 
-```rust
-use bevy_ingame_clock::{InGameClock, CustomCalendar, Month, Era};
+**Expression Syntax:**
 
-fn setup(mut commands: Commands) {
-    let custom_calendar = CustomCalendar::new(
-        60,  // minutes_per_hour
-        20,  // hours_per_day (instead of 24)
-        5,   // days_per_week (instead of 7)
-        vec![
-            Month::new("Frostmoon", 20),
-            Month::new("Thawmoon", 20),
-            Month::new("Bloomtide", 20),
-            // ... more months
-        ],
-        vec![
-            "Moonday".to_string(),    // Day 0 of the week
-            "Fireday".to_string(),
-            "Waterday".to_string(),
-            // ... more weekday names (must match days_per_week)
-        ],
-        Era::new("Age of Magic", 1000),
-    );
+Expressions use the variable `year` and support:
+- Arithmetic: `+`, `-`, `*`, `/`, `%` (modulo)
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `&&` (and), `||` (or), `!` (not)
+- Parentheses for grouping: `(`, `)`
+- Use `#` as the year placeholder
 
-    let clock = InGameClock::new()
-        .with_calendar(custom_calendar)
-        .with_day_duration(60.0);
+**Examples:**
 
-    commands.insert_resource(clock);
-}
+```ron
+// RON file examples:
+leap_years: "# % 4 == 0"                                    // Every 4 years
+leap_years: "# % 2 == 0"                                    // Every 2 years
+leap_years: "# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)" // Gregorian rule
+leap_years: "(# % 3 == 0 && # % 9 != 0) || # % 27 == 0"    // Complex custom rule
+leap_years: "false"                                         // No leap years
 ```
 
-**Creating Your Own Calendar:**
 
-Implement the [`Calendar`](src/lib.rs:25) trait to create fully custom calendar systems:
+**Leap Day Distribution:**
 
-```rust
-use bevy_ingame_clock::Calendar;
-use chrono::NaiveDateTime;
+Each month can specify `leap_days` - extra days added during leap years. This allows you to distribute leap days across multiple months or concentrate them in specific months, unlike the Gregorian calendar which adds all leap days to one month.
 
-struct MyCustomCalendar {
-    // Your custom calendar data
-}
+**Total Year Length:**
 
-impl Calendar for MyCustomCalendar {
-    fn format_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
-        // Your custom date formatting logic
-    }
-    
-    fn format_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
-        // Your custom time formatting logic
-    }
-    
-    fn format_datetime(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime, format: Option<&str>) -> String {
-        // Your custom datetime formatting logic
-    }
-    
-    fn get_date(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (i32, u32, u32) {
-        // Return (year, month, day)
-    }
-    
-    fn get_time(&self, elapsed_seconds: f64, start_datetime: NaiveDateTime) -> (u32, u32, u32) {
-        // Return (hour, minute, second)
-    }
-    
-    fn seconds_per_day(&self) -> u32 {
-        // Return seconds per day (default: 86400 for Gregorian)
-    }
-    
-    fn seconds_per_hour(&self) -> u32 {
-        // Return seconds per hour (default: 3600 for Gregorian)
-    }
-    
-    fn seconds_per_week(&self) -> u32 {
-        // Return seconds per week (default: 604800 for Gregorian)
-    }
-}
-```
+In a normal year, the year length is the sum of all month `days`. In a leap year, it's the sum of all `(days + leap_days)`.
+
+Example: In the fantasy calendar above with `leap_years: "# % 2 == 0"`:
+- Normal years (1001, 1003, 1005...): 201 days total
+- Leap years (1000, 1002, 1004...): 208 days total (7 extra leap days distributed: Frostmoon +3, Bloomtide +2, Icemoon +2)
+
+For more examples, see the [`examples/custom_calendar.rs`](examples/custom_calendar.rs) file and [`examples/fantasy_calendar.ron`](examples/fantasy_calendar.ron) configuration.
 
 ## API Reference
 
@@ -485,7 +447,7 @@ Demonstrates the interval event system with multiple registered intervals.
 cargo run --example digital_clock
 ```
 
-Visual digital clock display with vintage styling, showing time in digital format with a date calendar display.
+Visual digital clock display, showing time in digital format with a date calendar display.
 
 ![Digital Clock Example](digital_clock.gif)
 
@@ -504,10 +466,14 @@ Demonstrates implementing and using a custom fantasy calendar system loaded from
 - 60 minutes per hour
 - 20 hours per day
 - 5 days per week (first day: Moonday)
-- 10 months per year with configurable lengths (20 days each in the example)
-- Custom month definitions combining names and lengths (Frostmoon, Thawmoon, Bloomtide, etc.)
+- 10 months per year with varying lengths
+- Custom month definitions combining names, base days, and leap days (Frostmoon, Thawmoon, Bloomtide, etc.)
+- Leap year system: leap years occur every 2 years
+- Leap days distributed across months: Frostmoon (+3 days), Bloomtide (+2 days), Icemoon (+2 days)
+- Normal year: 201 days total; Leap year: 208 days total
 - Custom weekday names (Moonday, Fireday, Waterday, etc.) - first name in list is day 0
 - Era definition: "Age of Magic" starting at year 1000
+- Interactive display showing leap year status
 
 **Controls:**
 - `Space` - Pause/Resume

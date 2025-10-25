@@ -1,6 +1,6 @@
 //! # Bevy In-Game Clock
 //!
-//! A plugin for the Bevy game engine that provides an in-game clock system.
+//! A plugin for the Bevy game engine that provides an in-game clock and calendar system.
 //!
 //! ## Usage
 //!
@@ -20,6 +20,7 @@ use bevy::prelude::*;
 use chrono::{Datelike, Duration, NaiveDateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use evalexpr::*;
 
 /// Trait for implementing custom calendar systems
 ///
@@ -104,10 +105,36 @@ impl Calendar for GregorianCalendar {
 }
 
 /// Month definition combining name and length
+///
+/// Each month can have a different number of base days and additional leap days
+/// that are added during leap years. This allows for flexible calendar systems
+/// where leap days can be distributed across different months.
+///
+/// # Leap Days
+///
+/// The `leap_days` field specifies how many extra days this month has during a leap year.
+/// When a year is determined to be a leap year (based on the calendar's `leap_years` cycle),
+/// each month's total length becomes `days + leap_days`.
+///
+/// # Examples
+///
+/// ```
+/// # use bevy_ingame_clock::Month;
+/// // A month with 30 base days and 1 leap day
+/// let month = Month::new("Frostmoon", 30, 1);
+/// // In a normal year: 30 days
+/// // In a leap year: 31 days
+///
+/// // A month with no leap days
+/// let month = Month::new("Suntide", 21, 0);
+/// // Always 21 days regardless of leap year
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Month {
     pub name: String,
+    /// The base number of days in this month
     pub days: u32,
+    /// Additional days added to this month during leap years
     pub leap_days: u32,
 }
 
@@ -136,16 +163,84 @@ impl Era {
         }
     }
 }
+/// Default leap year rule: no leap years (always returns false)
+fn default_leap_years() -> String {
+    "false".to_string()
+}
+
 
 /// Custom calendar with fully configurable time units and structure
+///
+/// This calendar system allows you to create fantasy or alternative calendar systems
+/// with custom time units, month lengths, and leap year rules.
+///
+/// # Leap Year System
+///
+/// The leap year system is controlled by the `leap_years` field and the `leap_days` field
+/// in each [`Month`]. Here's how it works:
+///
+/// 1. **Leap Year Cycle**: The `leap_years` field determines how often leap years occur.
+///    If `leap_years` is 4, then years 0, 4, 8, 12, etc. are leap years.
+///    If `leap_years` is 0, there are no leap years.
+///
+/// 2. **Leap Day Distribution**: Each month can specify how many extra days (`leap_days`)
+///    it gains during a leap year. This allows you to distribute leap days across multiple
+///    months or concentrate them in specific months.
+///
+/// 3. **Total Year Length**: In a normal year, the year length is the sum of all month `days`.
+///    In a leap year, it's the sum of all month `(days + leap_days)`.
+///
+/// # Examples
+///
+/// ```
+/// # use bevy_ingame_clock::{CustomCalendar, Month, Era};
+/// // Fantasy calendar with leap years every 2 years
+/// let calendar = CustomCalendar::new(
+///     20,  // 20 minutes per hour
+///     8,   // 8 hours per day
+///     5,   // 5 days per week
+///     vec![
+///         Month::new("Frostmoon", 20, 3),  // 20 days normally, 23 in leap years
+///         Month::new("Thawmoon", 21, 0),   // Always 21 days
+///         Month::new("Bloomtide", 19, 2),  // 19 days normally, 21 in leap years
+///     ],
+///     vec!["Moonday".to_string(), "Fireday".to_string(), "Waterday".to_string(),
+///          "Earthday".to_string(), "Starday".to_string()],
+///     "# % 2 == 0".to_string(),  // Leap year every 2 years (years 0, 2, 4, 6, ...)
+///     Era::new("Age of Magic", 1000),
+/// );
+///
+/// // Check if specific years are leap years
+/// assert!(calendar.is_leap_year(1000));  // Start year is leap year
+/// assert!(!calendar.is_leap_year(1001));
+/// assert!(calendar.is_leap_year(1002));
+///
+/// // Normal year: 20 + 21 + 19 = 60 days
+/// // Leap year: 23 + 21 + 21 = 65 days (5 extra leap days distributed across months)
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomCalendar {
+    /// Number of minutes in one hour
     pub minutes_per_hour: u32,
+    /// Number of hours in one day
     pub hours_per_day: u32,
+    /// Number of days in one week
     pub days_per_week: u32,
+    /// The months of the year with their day counts
     pub months: Vec<Month>,
+    /// Names of the weekdays (must match `days_per_week` in length)
     pub weekday_names: Vec<String>,
-    pub leap_years: i64,
+    /// Leap year expression: a boolean expression that evaluates whether a year is a leap year
+    /// Use `#` as placeholder for the year value. Supports arithmetic, comparison, and logical operators.
+    ///
+    /// # Examples
+    /// - No leap years: `"false"`
+    /// - Every 2 years: `"# % 2 == 0"`
+    /// - Every 4 years: `"# % 4 == 0"`
+    /// - Gregorian: `"# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)"`
+    #[serde(default = "default_leap_years")]
+    pub leap_years: String,
+    /// The era/epoch information for this calendar
     pub era: Era,
 }
 
@@ -158,7 +253,7 @@ impl CustomCalendar {
         days_per_week: u32,
         months: Vec<Month>,
         weekday_names: Vec<String>,
-        leap_years: i64,
+        leap_years: String,
         era: Era,
     ) -> Self {
         assert_eq!(weekday_names.len(), days_per_week as usize, "Weekday names must match days_per_week");
@@ -177,6 +272,16 @@ impl CustomCalendar {
     
     fn days_per_year(&self) -> u32 {
         self.months.iter().map(|m| m.days).sum()
+    }
+    
+    /// Check if a given year is a leap year according to this calendar's leap year expression
+    pub fn is_leap_year(&self, year: i32) -> bool {
+        // Replace # placeholder with the actual year value
+        let expression = self.leap_years.replace("#", &year.to_string());
+        
+        // Evaluate the expression
+        eval_boolean(&expression)
+            .unwrap_or(false)
     }
     
     fn seconds_per_minute(&self) -> u32 {
@@ -211,7 +316,7 @@ impl Calendar for CustomCalendar {
         let years_since_epoch = total_days / days_per_year;
         let year = self.era.start_year + years_since_epoch;
         let day_of_year = (total_days % days_per_year) as u32;
-        let is_leap_year = year % self.leap_years == 0;
+        let is_leap_year = self.is_leap_year(year as i32);
         // Find which month and day within that month
         let mut days_remaining = day_of_year;
         let mut month = 1u32;
@@ -887,7 +992,7 @@ mod tests {
                 "Day4".to_string(),
                 "Day5".to_string(),
             ],
-            0,
+            "false".to_string(),
             Era::new("Test Era", 0),
         );
 
@@ -897,5 +1002,230 @@ mod tests {
         assert_eq!(ClockInterval::Day.as_seconds(&custom_calendar), 72000); // 20 * 60 * 60
         assert_eq!(ClockInterval::Week.as_seconds(&custom_calendar), 360000); // 72000 * 5
         assert_eq!(ClockInterval::Custom(90).as_seconds(&custom_calendar), 90);
+    }
+    
+    #[test]
+    fn test_custom_calendar_leap_years() {
+        // Create a calendar with leap years every 2 years
+        let calendar = CustomCalendar::new(
+            60, // minutes_per_hour
+            24, // hours_per_day
+            7,  // days_per_week
+            vec![
+                Month::new("Month1", 30, 2),  // 30 days, +2 in leap years
+                Month::new("Month2", 30, 1),  // 30 days, +1 in leap years
+                Month::new("Month3", 30, 0),  // 30 days, no leap days
+            ],
+            vec![
+                "Day1".to_string(), "Day2".to_string(), "Day3".to_string(),
+                "Day4".to_string(), "Day5".to_string(), "Day6".to_string(),
+                "Day7".to_string()
+            ],
+            "# % 2 == 0".to_string(),  // leap year every 2 years
+            Era::new("Test Era", 1000),
+        );
+
+        // Test leap year detection
+        assert!(calendar.is_leap_year(1000));  // Start year (1000 % 2 == 0)
+        assert!(!calendar.is_leap_year(1001)); // Not a leap year
+        assert!(calendar.is_leap_year(1002));  // Leap year (1002 % 2 == 0)
+        assert!(!calendar.is_leap_year(1003));
+        assert!(calendar.is_leap_year(1004));
+        
+        // Test that negative years work correctly
+        assert!(calendar.is_leap_year(0));
+        assert!(calendar.is_leap_year(-2));
+        assert!(!calendar.is_leap_year(-1));
+    }
+    
+    #[test]
+    fn test_custom_calendar_no_leap_years() {
+        // Calendar with leap_years = 0 should have no leap years
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 5)],  // leap_days is ignored
+            vec![
+                "Day1".to_string(), "Day2".to_string(), "Day3".to_string(),
+                "Day4".to_string(), "Day5".to_string(), "Day6".to_string(),
+                "Day7".to_string()
+            ],
+            "false".to_string(),  // no leap years
+            Era::new("No Leap Era", 0),
+        );
+
+        assert!(!calendar.is_leap_year(0));
+        assert!(!calendar.is_leap_year(4));
+        assert!(!calendar.is_leap_year(100));
+        assert!(!calendar.is_leap_year(1000));
+    }
+    
+    #[test]
+    fn test_fantasy_calendar_date_calculation() {
+        // Test the fantasy calendar from the example
+        let calendar = CustomCalendar::new(
+            20, // minutes_per_hour
+            8,  // hours_per_day
+            5,  // days_per_week
+            vec![
+                Month::new("Frostmoon", 20, 3),
+                Month::new("Thawmoon", 21, 0),
+                Month::new("Bloomtide", 19, 2),
+            ],
+            vec!["Moonday".to_string(), "Fireday".to_string(), "Waterday".to_string(),
+                 "Earthday".to_string(), "Starday".to_string()],
+            "# % 2 == 0".to_string(),  // leap year every 2 years
+            Era::new("Age of Magic", 1000),
+        );
+        
+        let start_datetime = chrono::NaiveDateTime::new(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        );
+        
+        // At 0 seconds, should be start of year 1000
+        let (year, month, day) = calendar.get_date(0.0, start_datetime);
+        assert_eq!(year, 1000);
+        assert_eq!(month, 1);
+        assert_eq!(day, 1);
+        
+        // Test leap year (1000 % 2 == 0, so it's a leap year)
+        assert!(calendar.is_leap_year(1000));
+        
+        // Normal year: 20 + 21 + 19 = 60 days
+        // Leap year: 23 + 21 + 21 = 65 days
+        let seconds_per_day = 8 * 20 * 60; // 9600 seconds per day
+        
+        // Test first day of second month in leap year (day 24 = 23 days of Frostmoon + 1)
+        let elapsed = 23.0 * seconds_per_day as f64;
+        let (year, month, day) = calendar.get_date(elapsed, start_datetime);
+        assert_eq!(year, 1000);
+        assert_eq!(month, 2);  // Thawmoon
+        assert_eq!(day, 1);
+    }
+    
+    #[test]
+    fn test_expression_based_leap_year_gregorian() {
+        // Test Gregorian calendar leap year rule
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Jan", 31, 0)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)".to_string(),
+            Era::new("CE", 0),
+        );
+        
+        // Test classic Gregorian leap year cases
+        assert!(calendar.is_leap_year(2000));  // Divisible by 400
+        assert!(!calendar.is_leap_year(1900)); // Divisible by 100 but not 400
+        assert!(calendar.is_leap_year(2004));  // Divisible by 4 but not 100
+        assert!(!calendar.is_leap_year(2001)); // Not divisible by 4
+        assert!(calendar.is_leap_year(2024));  // Divisible by 4 but not 100
+        assert!(!calendar.is_leap_year(2100)); // Divisible by 100 but not 400
+        assert!(calendar.is_leap_year(2400));  // Divisible by 400
+    }
+    
+    #[test]
+    fn test_expression_based_leap_year_custom() {
+        // Test custom expression: leap year every 5 years
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 1)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "# % 5 == 0".to_string(),
+            Era::new("Test Era", 0),
+        );
+        
+        assert!(calendar.is_leap_year(0));
+        assert!(!calendar.is_leap_year(1));
+        assert!(!calendar.is_leap_year(4));
+        assert!(calendar.is_leap_year(5));
+        assert!(calendar.is_leap_year(10));
+        assert!(!calendar.is_leap_year(13));
+    }
+    
+    #[test]
+    fn test_expression_based_leap_year_complex() {
+        // Test complex expression: leap year if (divisible by 3 AND not divisible by 9) OR divisible by 27
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 1)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "(# % 3 == 0 && # % 9 != 0) || # % 27 == 0".to_string(),
+            Era::new("Complex Era", 0),
+        );
+        
+        assert!(calendar.is_leap_year(3));   // Divisible by 3, not by 9
+        assert!(calendar.is_leap_year(6));   // Divisible by 3, not by 9
+        assert!(!calendar.is_leap_year(9));  // Divisible by 9 but not by 27
+        assert!(calendar.is_leap_year(12));  // Divisible by 3, not by 9
+        assert!(!calendar.is_leap_year(18)); // Divisible by 9 but not by 27
+        assert!(calendar.is_leap_year(27));  // Divisible by 27
+        assert!(calendar.is_leap_year(54));  // Divisible by 27
+    }
+    
+    #[test]
+    fn test_expression_invalid_returns_false() {
+        // Test that invalid expressions return false instead of panicking
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 1)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "invalid expression here".to_string(),
+            Era::new("Test Era", 0),
+        );
+        
+        // Should return false for invalid expression
+        assert!(!calendar.is_leap_year(2000));
+        assert!(!calendar.is_leap_year(2004));
+    }
+    
+    #[test]
+    fn test_leap_year_simple_expression() {
+        // Test simple leap year expression
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 1)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "# % 4 == 0".to_string(),
+            Era::new("Test Era", 0),
+        );
+        
+        assert!(calendar.is_leap_year(0));
+        assert!(calendar.is_leap_year(4));
+        assert!(!calendar.is_leap_year(1));
+    }
+    
+    #[test]
+    fn test_leap_year_serde_expression() {
+        // Test expression serialization from RON
+        let calendar = CustomCalendar::new(
+            60, 24, 7,
+            vec![Month::new("Month1", 30, 1)],
+            vec![
+                "Mon".to_string(), "Tue".to_string(), "Wed".to_string(),
+                "Thu".to_string(), "Fri".to_string(), "Sat".to_string(), "Sun".to_string()
+            ],
+            "# % 3 == 0".to_string(),
+            Era::new("Test Era", 0),
+        );
+        
+        assert!(calendar.is_leap_year(0));
+        assert!(calendar.is_leap_year(3));
+        assert!(!calendar.is_leap_year(1));
     }
 }
