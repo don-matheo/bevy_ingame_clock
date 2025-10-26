@@ -10,10 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Custom Calendar System** - Support for non-Gregorian calendars (fantasy worlds, sci-fi settings)
   - `CustomCalendar` struct with fully configurable time units
-  - Configurable minutes per hour, hours per day, days per week
+  - Configurable minutes per hour, hours per day
   - Custom month definitions with names and varying day counts
-  - Custom weekday names
-  - Era/Epoch support with custom names and start years
+  - Custom weekday names (number of weekdays determines days per week)
+  - Epoch support with custom names and start years
   - Expression-Based Leap Year System using boolean expressions:
     - Define leap year rules using simple string expressions with `#` as the year placeholder
     - Expression syntax supports: arithmetic (`%`, `+`, `-`, `*`, `/`), comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`)

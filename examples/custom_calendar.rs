@@ -46,7 +46,7 @@ fn setup(mut commands: Commands) {
     println!("\nCalendar structure:");
     println!("  - {} minutes per hour", fantasy_calendar.minutes_per_hour);
     println!("  - {} hours per day", fantasy_calendar.hours_per_day);
-    println!("  - {} days per week", fantasy_calendar.days_per_week);
+    println!("  - {} days per week", fantasy_calendar.weekday_names.len());
     println!("  - Week starts with: {}", fantasy_calendar.weekday_names[0]);
     println!("  - Leap year rule: {:?}", fantasy_calendar.leap_years);
     
@@ -62,9 +62,9 @@ fn setup(mut commands: Commands) {
     }
     println!("  - {} days per normal year", total_days);
     println!("  - {} days per leap year", total_days + total_leap_days);
-    println!("\nEra/Epoch:");
-    println!("  - Name: {}", fantasy_calendar.era.name);
-    println!("  - Starting year: {}", fantasy_calendar.era.start_year);
+    println!("\nEpoch:");
+    println!("  - Name: {}", fantasy_calendar.epoch.name);
+    println!("  - Starting year: {}", fantasy_calendar.epoch.start_year);
     println!("\nTime progression: 1 in-game day = 60 real seconds");
     println!("\nControls:");
     println!("  Space - Pause/Resume");
@@ -72,7 +72,6 @@ fn setup(mut commands: Commands) {
     println!("  R     - Reset clock");
     println!();
 
-    // Store calendar for leap year checking
     let calendar_clone = fantasy_calendar.clone();
     commands.insert_resource(CalendarResource(calendar_clone));
 
@@ -137,6 +136,7 @@ fn display_time(
             
             // Check if current year is a leap year using the calendar's method
             let is_leap = calendar.0.is_leap_year(year);
+            let leap_years_expression = calendar.0.leap_years.clone();
             
             let status = if clock.paused { "PAUSED" } else { "RUNNING" };
             
@@ -151,6 +151,7 @@ fn display_time(
                 Time only:         {}\n\
                 Components:        Year {}, Month {}, Day {} | {}:{:02}:{:02}\n\
                 Is leap year:      {}\n\
+                Leap years expression:      {}\n\
                 \n\
                 Speed:             {:.1}x\n\
                 Day duration:      {:.1}s\n\
@@ -171,6 +172,7 @@ fn display_time(
                 minute,
                 second,
                 if is_leap { "Yes" } else { "No" },
+                leap_years_expression,
                 clock.speed,
                 clock.day_duration()
             );

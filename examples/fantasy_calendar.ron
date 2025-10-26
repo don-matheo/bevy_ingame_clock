@@ -3,7 +3,6 @@
 (
     minutes_per_hour: 60,
     hours_per_day: 20,
-    days_per_week: 5,
     leap_years: "# % 2 == 0",  // Leap year every 2 years
     months: [
         (name: "Frostmoon", days: 20, leap_days: 3),
@@ -24,7 +23,7 @@
         "Earthday",
         "Starday",
     ],
-    era: (
+    epoch: (
         name: "Age of Magic",
         start_year: 1000,
     ),

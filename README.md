@@ -162,7 +162,7 @@ fn custom_formats(clock: Res<InGameClock>) {
 - `%p` - AM/PM
 - `%B` - Full month name
 - `%A` - Full weekday name
-- `%E` - Era name (for custom calendars only)
+- `%E` - Epoch name (for custom calendars only)
 - See [chrono format docs](https://docs.rs/chrono/latest/chrono/format/strftime/index.html) for more
 
 ### Interval Events
@@ -219,89 +219,18 @@ fn handle_events(mut events: MessageReader<ClockIntervalEvent>) {
 
 The plugin supports custom calendar systems for fantasy or sci-fi games with non-Gregorian time structures.
 
-#### Loading from RON Configuration
-
-The recommended way to configure a custom calendar is using a RON file:
-
-```ron
-// fantasy_calendar.ron
-// The first weekday in weekday_names list is considered day 0 of the week
-(
-    minutes_per_hour: 60,
-    hours_per_day: 20,
-    days_per_week: 5,
-    leap_years: "# % 2 == 0",  // Leap year occurs every 2 years
-    months: [
-        (name: "Frostmoon", days: 20, leap_days: 3),   // 20 days normally, 23 in leap years
-        (name: "Thawmoon", days: 21, leap_days: 0),    // Always 21 days
-        (name: "Bloomtide", days: 19, leap_days: 2),   // 19 days normally, 21 in leap years
-        (name: "Greentide", days: 20, leap_days: 0),   // Always 20 days
-        (name: "Suntide", days: 21, leap_days: 0),     // Always 21 days
-        (name: "Harvestmoon", days: 20, leap_days: 0), // Always 20 days
-        (name: "Goldmoon", days: 21, leap_days: 0),    // Always 21 days
-        (name: "Fallmoon", days: 20, leap_days: 0),    // Always 20 days
-        (name: "Darkmoon", days: 21, leap_days: 0),    // Always 21 days
-        (name: "Icemoon", days: 18, leap_days: 2),     // 18 days normally, 20 in leap years
-    ],
-    weekday_names: [
-        "Moonday",
-        "Fireday",
-        "Waterday",
-        "Earthday",
-        "Starday",
-    ],
-    era: (
-        name: "Age of Magic",
-        start_year: 1000,
-    ),
-)
-```
-
-```rust
-use bevy_ingame_clock::{InGameClock, CustomCalendar};
-use std::fs;
-
-fn setup(mut commands: Commands) {
-    // Load calendar configuration from RON file
-    let config = fs::read_to_string("fantasy_calendar.ron")
-        .expect("Failed to read calendar config");
-    
-    let custom_calendar: CustomCalendar = ron::from_str(&config)
-        .expect("Failed to parse calendar config");
-
-    // Use the custom calendar
-    let clock = InGameClock::new()
-        .with_calendar(custom_calendar)
-        .with_day_duration(60.0);
-
-    commands.insert_resource(clock);
-}
-
-fn display_time(clock: Res<InGameClock>) {
-    // Format with custom month names
-    let custom_format = clock.format_datetime(Some("Year %Y, %B %d - %H:%M:%S"));
-    println!("{}", custom_format);
-    // Output: "Year 1000, Frostmoon 01 - 00:00:00"
-    
-    // Format with era name
-    let era_format = clock.format_datetime(Some("%E Year %Y, %B %d - %H:%M:%S"));
-    println!("{}", era_format);
-    // Output: "Age of Magic Year 1000, Frostmoon 01 - 00:00:00"
-}
-```
 
 **Configuration Options:**
 - `minutes_per_hour`: Number of minutes in an hour
 - `hours_per_day`: Number of hours in a day
-- `days_per_week`: Number of days in a week
 - `leap_years`: Leap year expression - a boolean expression using `#` as the year placeholder (see Leap Year System below)
 - `months`: Array of month definitions, each with:
   - `name`: Month name
   - `days`: Base number of days in the month
   - `leap_days`: Additional days added during leap years (allows distributing leap days across months)
-- `weekday_names`: Names for each day of the week (must match days_per_week). The first name in the list is day 0 of the week
-- `era`: Era/Epoch definition with:
-  - `name`: Name of the era (e.g., "Age of Magic", "Common Era")
+- `weekday_names`: Names for each day of the week. The number of weekday names determines the days per week. The first name in the list is day 0 of the week
+- `epoch`: Epoch definition with:
+  - `name`: Name of the epoch (e.g., "Age of Magic", "Common Era")
   - `start_year`: Starting year for the calendar system
 
 **Leap Year System:**
@@ -472,7 +401,7 @@ Demonstrates implementing and using a custom fantasy calendar system loaded from
 - Leap days distributed across months: Frostmoon (+3 days), Bloomtide (+2 days), Icemoon (+2 days)
 - Normal year: 201 days total; Leap year: 208 days total
 - Custom weekday names (Moonday, Fireday, Waterday, etc.) - first name in list is day 0
-- Era definition: "Age of Magic" starting at year 1000
+- Epoch definition: "Age of Magic" starting at year 1000
 - Interactive display showing leap year status
 
 **Controls:**
