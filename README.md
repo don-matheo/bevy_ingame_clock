@@ -2,6 +2,8 @@
 
 A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-game clock system with date/time tracking, configurable speed, sending events on time based intervals, and flexible formatting.
 
+![Digital Clock Example](digital_clock.gif)
+
 ## Features
 
 - 📅 **Date & Time Tracking** - Full date and time support with configurable start date/time
