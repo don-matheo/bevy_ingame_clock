@@ -219,8 +219,93 @@ fn handle_events(mut events: MessageReader<ClockIntervalEvent>) {
 
 The plugin supports custom calendar systems for fantasy or sci-fi games with non-Gregorian time structures.
 
+#### Creating Custom Calendars: Two Approaches
 
-**Configuration Options:**
+You can create custom calendars in two ways:
+
+**1. Builder Pattern (Programmatic)**
+
+Create calendars directly in code using the `CustomCalendarBuilder`:
+
+```rust
+use bevy_ingame_clock::{CustomCalendarBuilder, Month, Epoch};
+
+fn setup(mut commands: Commands) {
+    let fantasy_calendar = CustomCalendarBuilder::new()
+        .minutes_per_hour(60)
+        .hours_per_day(20)
+        .months(vec![
+            Month::new("Frostmoon", 20, 3),
+            Month::new("Thawmoon", 21, 0),
+            Month::new("Bloomtide", 19, 2),
+        ])
+        .weekday_names(vec![
+            "Moonday".to_string(),
+            "Fireday".to_string(),
+            "Waterday".to_string(),
+            "Earthday".to_string(),
+            "Starday".to_string(),
+        ])
+        .leap_years("# % 2 == 0")
+        .epoch(Epoch::new("Age of Magic", 1000))
+        .build();
+
+    let clock = InGameClock::new()
+        .with_calendar(fantasy_calendar)
+        .with_day_duration(60.0);
+    
+    commands.insert_resource(clock);
+}
+```
+
+**2. RON Configuration Files**
+
+Load calendars from configuration files for easier editing by designers:
+
+```rust
+use bevy_ingame_clock::{CustomCalendar, InGameClock};
+use std::fs;
+
+fn setup(mut commands: Commands) {
+    let calendar_config = fs::read_to_string("assets/fantasy_calendar.ron")
+        .expect("Failed to read calendar file");
+    
+    let fantasy_calendar: CustomCalendar = ron::from_str(&calendar_config)
+        .expect("Failed to parse calendar file");
+
+    let clock = InGameClock::new()
+        .with_calendar(fantasy_calendar)
+        .with_day_duration(60.0);
+    
+    commands.insert_resource(clock);
+}
+```
+
+Example RON file (`assets/fantasy_calendar.ron`):
+
+```ron
+(
+    minutes_per_hour: 60,
+    hours_per_day: 20,
+    months: [
+        (name: "Frostmoon", days: 20, leap_days: 3),
+        (name: "Thawmoon", days: 21, leap_days: 0),
+        (name: "Bloomtide", days: 19, leap_days: 2),
+    ],
+    weekday_names: ["Moonday", "Fireday", "Waterday", "Earthday", "Starday"],
+    leap_years: "# % 2 == 0",
+    epoch: (name: "Age of Magic", start_year: 1000),
+)
+```
+
+**Which Approach to Use?**
+
+- **Builder Pattern**: Best when calendars are defined in code and don't change
+- **RON Files**: Best when you want designers to edit calendars without recompiling, or when you need multiple calendar variants
+
+Both approaches create identical `CustomCalendar` instances and work seamlessly with the same API.
+
+#### Configuration Options
 - `minutes_per_hour`: Number of minutes in an hour
 - `hours_per_day`: Number of hours in a day
 - `leap_years`: Leap year expression - a boolean expression using `#` as the year placeholder (see Leap Year System below)
