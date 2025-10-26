@@ -11,13 +11,14 @@ A plugin for the [Bevy game engine](https://bevyengine.org) that provides an in-
 - 🎨 **Flexible Formatting** - Default or custom datetime formats using chrono
 - 📆 **Date Calculations** - Automatic handling of months, years, and leap years via chrono
 - ⚙️ **Event System** - Receive Bevy events at configurable intervals (hourly, daily, custom)
+- 🗓️ **Custom Calendars** - Support for non-Gregorian calendars (fantasy worlds, sci-fi settings)
 - 🎮 **Simple Integration** - Easy to use with Bevy's ECS
 
 ## Compatibility
 
 | Bevy Version | Plugin Version |
 |--------------|----------------|
-| 0.17         | 0.1            |
+| 0.17         | 0.2            |
 
 ## Installation
 
@@ -26,7 +27,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 bevy = "0.17"
-bevy_ingame_clock = "0.1"
+bevy_ingame_clock = "0.2"
 ```
 
 ## Quick Start
@@ -161,6 +162,7 @@ fn custom_formats(clock: Res<InGameClock>) {
 - `%p` - AM/PM
 - `%B` - Full month name
 - `%A` - Full weekday name
+- `%E` - Epoch name (for custom calendars only)
 - See [chrono format docs](https://docs.rs/chrono/latest/chrono/format/strftime/index.html) for more
 
 ### Interval Events
@@ -206,10 +208,154 @@ fn handle_events(mut events: MessageReader<ClockIntervalEvent>) {
 **Available Intervals:**
 - `ClockInterval::Second` - Every in-game second
 - `ClockInterval::Minute` - Every 60 in-game seconds
-- `ClockInterval::Hour` - Every 3600 in-game seconds
-- `ClockInterval::Day` - Every 86400 in-game seconds
-- `ClockInterval::Week` - Every 7 in-game days
+- `ClockInterval::Hour` - Every hour (duration depends on calendar: 3600s for Gregorian, configurable for custom calendars)
+- `ClockInterval::Day` - Every day (duration depends on calendar: 86400s for Gregorian, configurable for custom calendars)
+- `ClockInterval::Week` - Every week (duration depends on calendar: 604800s for Gregorian, configurable for custom calendars)
 - `ClockInterval::Custom(seconds)` - Custom interval in seconds
+
+**Note:** When using custom calendars, the Hour, Day, and Week intervals automatically adjust to match the calendar's configured time units. For example, with a 20-hour day, the Day interval fires every 72000 seconds instead of 86400.
+
+### Custom Calendars
+
+The plugin supports custom calendar systems for fantasy or sci-fi games with non-Gregorian time structures.
+
+#### Creating Custom Calendars: Two Approaches
+
+You can create custom calendars in two ways:
+
+**1. Builder Pattern (Programmatic)**
+
+Create calendars directly in code using the `CustomCalendarBuilder`:
+
+```rust
+use bevy_ingame_clock::{CustomCalendarBuilder, Month, Epoch};
+
+fn setup(mut commands: Commands) {
+    let fantasy_calendar = CustomCalendarBuilder::new()
+        .minutes_per_hour(60)
+        .hours_per_day(20)
+        .months(vec![
+            Month::new("Frostmoon", 20, 3),
+            Month::new("Thawmoon", 21, 0),
+            Month::new("Bloomtide", 19, 2),
+        ])
+        .weekdays(vec![
+            "Moonday".to_string(),
+            "Fireday".to_string(),
+            "Waterday".to_string(),
+            "Earthday".to_string(),
+            "Starday".to_string(),
+        ])
+        .leap_years("# % 2 == 0")
+        .epoch(Epoch::new("Age of Magic", 1000))
+        .build();
+
+    let clock = InGameClock::new()
+        .with_calendar(fantasy_calendar)
+        .with_day_duration(60.0);
+    
+    commands.insert_resource(clock);
+}
+```
+
+**2. RON Configuration Files**
+
+Load calendars from configuration files for easier editing by designers:
+
+```rust
+use bevy_ingame_clock::{CustomCalendar, InGameClock};
+use std::fs;
+
+fn setup(mut commands: Commands) {
+    let calendar_config = fs::read_to_string("assets/fantasy_calendar.ron")
+        .expect("Failed to read calendar file");
+    
+    let fantasy_calendar: CustomCalendar = ron::from_str(&calendar_config)
+        .expect("Failed to parse calendar file");
+
+    let clock = InGameClock::new()
+        .with_calendar(fantasy_calendar)
+        .with_day_duration(60.0);
+    
+    commands.insert_resource(clock);
+}
+```
+
+Example RON file (`assets/fantasy_calendar.ron`):
+
+```ron
+(
+    minutes_per_hour: 60,
+    hours_per_day: 20,
+    months: [
+        (name: "Frostmoon", days: 20, leap_days: 3),
+        (name: "Thawmoon", days: 21, leap_days: 0),
+        (name: "Bloomtide", days: 19, leap_days: 2),
+    ],
+    weekdays: ["Moonday", "Fireday", "Waterday", "Earthday", "Starday"],
+    leap_years: "# % 2 == 0",
+    epoch: (name: "Age of Magic", start_year: 1000),
+)
+```
+
+**Which Approach to Use?**
+
+- **Builder Pattern**: Best when calendars are defined in code and don't change
+- **RON Files**: Best when you want designers to edit calendars without recompiling, or when you need multiple calendar variants
+
+Both approaches create identical `CustomCalendar` instances and work seamlessly with the same API.
+
+#### Configuration Options
+- `minutes_per_hour`: Number of minutes in an hour
+- `hours_per_day`: Number of hours in a day
+- `leap_years`: Leap year expression - a boolean expression using `#` as the year placeholder (see Leap Year System below)
+- `months`: Array of month definitions, each with:
+  - `name`: Month name
+  - `days`: Base number of days in the month
+  - `leap_days`: Additional days added during leap years (allows distributing leap days across months)
+- `weekdays`: Names for each day of the week. The number of weekday names determines the days per week. The first name in the list is day 0 of the week
+- `epoch`: Epoch definition with:
+  - `name`: Name of the epoch (e.g., "Age of Magic", "Common Era")
+  - `start_year`: Starting year for the calendar system
+
+**Leap Year System:**
+
+The leap year system uses boolean expressions to define when leap years occur. The `leap_years` field accepts a string expression using `#` as a placeholder for the year value.
+
+**Expression Syntax:**
+
+Expressions use the variable `year` and support:
+- Arithmetic: `+`, `-`, `*`, `/`, `%` (modulo)
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `&&` (and), `||` (or), `!` (not)
+- Parentheses for grouping: `(`, `)`
+- Use `#` as the year placeholder
+
+**Examples:**
+
+```ron
+// RON file examples:
+leap_years: "# % 4 == 0"                                    // Every 4 years
+leap_years: "# % 2 == 0"                                    // Every 2 years
+leap_years: "# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)" // Gregorian rule
+leap_years: "(# % 3 == 0 && # % 9 != 0) || # % 27 == 0"    // Complex custom rule
+leap_years: "false"                                         // No leap years
+```
+
+
+**Leap Day Distribution:**
+
+Each month can specify `leap_days` - extra days added during leap years. This allows you to distribute leap days across multiple months or concentrate them in specific months, unlike the Gregorian calendar which adds all leap days to one month.
+
+**Total Year Length:**
+
+In a normal year, the year length is the sum of all month `days`. In a leap year, it's the sum of all `(days + leap_days)`.
+
+Example: In the fantasy calendar above with `leap_years: "# % 2 == 0"`:
+- Normal years (1001, 1003, 1005...): 201 days total
+- Leap years (1000, 1002, 1004...): 208 days total (7 extra leap days distributed: Frostmoon +3, Bloomtide +2, Icemoon +2)
+
+For more examples, see the [`examples/custom_calendar.rs`](examples/custom_calendar.rs) file and [`examples/fantasy_calendar.ron`](examples/fantasy_calendar.ron) configuration.
 
 ## API Reference
 
@@ -315,9 +461,53 @@ Demonstrates the interval event system with multiple registered intervals.
 cargo run --example digital_clock
 ```
 
-Visual digital clock display with vintage styling, showing time in digital format with a date calendar display.
+Visual digital clock display, showing time in digital format with a date calendar display.
 
 ![Digital Clock Example](digital_clock.gif)
+
+**Controls:**
+- `Space` - Pause/Resume
+- `+/-` - Speed Up/Down
+- `R` - Reset clock
+
+### Custom Calendar Example (RON Configuration)
+
+```bash
+cargo run --example custom_calendar
+```
+
+Demonstrates a custom fantasy calendar system loaded from a RON configuration file with:
+- 60 minutes per hour
+- 20 hours per day
+- 5 days per week (first day: Moonday)
+- 10 months per year with varying lengths
+- Custom month definitions combining names, base days, and leap days (Frostmoon, Thawmoon, Bloomtide, etc.)
+- Leap year system: leap years occur every 2 years
+- Leap days distributed across months: Frostmoon (+3 days), Bloomtide (+2 days), Icemoon (+2 days)
+- Normal year: 201 days total; Leap year: 208 days total
+- Custom weekday names (Moonday, Fireday, Waterday, etc.) - first name in list is day 0
+- Epoch definition: "Age of Magic" starting at year 1000
+- Interactive display showing leap year status
+
+**Controls:**
+- `Space` - Pause/Resume
+- `+/-` - Speed Up/Down
+- `R` - Reset clock
+
+### Custom Calendar Builder Example (Programmatic)
+
+```bash
+cargo run --example custom_calendar_builder
+```
+
+Demonstrates programmatically creating a custom sci-fi calendar using the `CustomCalendarBuilder` pattern:
+- 100 minutes per hour
+- 10 hours per day (shorter days on a faster-rotating planet)
+- 6 days per week (Solday, Lunaday, Marsday, etc.)
+- 13 months per year with uniform lengths
+- Gregorian-style leap year rule: `# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)`
+- 365 days per normal year; 366 days per leap year
+- Epoch definition: "Galactic Standard Era" starting at year 2500
 
 **Controls:**
 - `Space` - Pause/Resume
