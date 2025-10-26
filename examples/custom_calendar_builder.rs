@@ -1,8 +1,15 @@
-//! Example demonstrating custom calendar systems.
+//! Example demonstrating custom calendar creation using the builder pattern.
 //!
-//! This example shows how to use the CustomCalendar to create a game world
-//! with a custom calendar system different from the Gregorian calendar.
-//! The calendar configuration is loaded from a RON file.
+//! This example shows how to programmatically create a custom calendar system
+//! using the CustomCalendarBuilder, without needing configuration files.
+//! This approach is ideal when calendar definitions are fixed in code.
+//!
+//! This sci-fi calendar features:
+//! - 100 minutes per hour
+//! - 10 hours per day (shorter days on a faster-rotating planet)
+//! - 6 days per week
+//! - 13 months per year with varying lengths
+//! - Complex leap year rule (Gregorian-style)
 //!
 //! Controls:
 //! - Space: Pause/Resume
@@ -10,8 +17,10 @@
 //! - R: Reset clock
 
 use bevy::prelude::*;
-use bevy_ingame_clock::{ClockCommands, ClockInterval, ClockIntervalEvent, CustomCalendar, InGameClock, InGameClockPlugin};
-use std::fs;
+use bevy_ingame_clock::{
+    ClockCommands, ClockInterval, ClockIntervalEvent, CustomCalendarBuilder, 
+    Epoch, InGameClock, InGameClockPlugin, Month,
+};
 
 fn main() {
     App::new()
@@ -25,35 +34,57 @@ fn main() {
 #[derive(Component)]
 struct ClockText;
 
-#[derive(Resource)]
-struct CalendarResource(CustomCalendar);
-
 fn setup(mut commands: Commands) {
     // Camera
     commands.spawn(Camera2d);
 
-    // Load the fantasy calendar from RON file
-    let calendar_config = fs::read_to_string("examples/fantasy_calendar.ron")
-        .expect("Failed to read fantasy_calendar.ron");
-    
-    let fantasy_calendar: CustomCalendar = ron::from_str(&calendar_config)
-        .expect("Failed to parse fantasy_calendar.ron");
-    
+    // Create a custom sci-fi calendar using the builder pattern
+    let scifi_calendar = CustomCalendarBuilder::new()
+        .minutes_per_hour(100)
+        .hours_per_day(10)
+        .months(vec![
+            Month::new("Primaris", 28, 0),
+            Month::new("Secundus", 28, 0),
+            Month::new("Tertius", 28, 1),   // Gains 1 day in leap years
+            Month::new("Quartus", 28, 0),
+            Month::new("Quintus", 28, 0),
+            Month::new("Sextus", 28, 0),
+            Month::new("Septimus", 28, 0),
+            Month::new("Octavus", 28, 0),
+            Month::new("Nonus", 28, 0),
+            Month::new("Decimus", 28, 0),
+            Month::new("Undecimus", 28, 0),
+            Month::new("Duodecimus", 28, 0),
+            Month::new("Ultimus", 29, 0),   // Slightly longer last month
+        ])
+        .weekdays(vec![
+            "Solday".to_string(),
+            "Lunaday".to_string(),
+            "Marsday".to_string(),
+            "Mercday".to_string(),
+            "Jupday".to_string(),
+            "Saturnday".to_string(),
+        ])
+        // Complex leap year rule similar to Gregorian calendar
+        .leap_years("# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)")
+        .epoch(Epoch::new("Galactic Standard Era", 2500))
+        .build();
+
     // Print calendar info to console
-    println!("\n=== Loaded Fantasy Calendar from RON ===");
-    println!("Configuration file: examples/fantasy_calendar.ron");
+    println!("\n=== Sci-Fi Calendar (Built with CustomCalendarBuilder) ===");
+    println!("Calendar definition: Programmatically created in code");
 
     println!("\nCalendar structure:");
-    println!("  - {} minutes per hour", fantasy_calendar.minutes_per_hour);
-    println!("  - {} hours per day", fantasy_calendar.hours_per_day);
-    println!("  - {} days per week", fantasy_calendar.weekdays.len());
-    println!("  - Week starts with: {}", fantasy_calendar.weekdays[0]);
-    println!("  - Leap year rule: {:?}", fantasy_calendar.leap_years);
+    println!("  - {} minutes per hour", scifi_calendar.minutes_per_hour);
+    println!("  - {} hours per day", scifi_calendar.hours_per_day);
+    println!("  - {} days per week", scifi_calendar.weekdays.len());
+    println!("  - Week starts with: {}", scifi_calendar.weekdays[0]);
+    println!("  - Leap year rule: {:?}", scifi_calendar.leap_years);
     
-    let total_days: u32 = fantasy_calendar.months.iter().map(|m| m.days).sum();
-    let total_leap_days: u32 = fantasy_calendar.months.iter().map(|m| m.leap_days).sum();
-    println!("  - {} months with varying lengths", fantasy_calendar.months.len());
-    for month in &fantasy_calendar.months {
+    let total_days: u32 = scifi_calendar.months.iter().map(|m| m.days).sum();
+    let total_leap_days: u32 = scifi_calendar.months.iter().map(|m| m.leap_days).sum();
+    println!("  - {} months with varying lengths", scifi_calendar.months.len());
+    for month in &scifi_calendar.months {
         if month.leap_days > 0 {
             println!("    - {}: {} days (+{} leap days)", month.name, month.days, month.leap_days);
         } else {
@@ -63,23 +94,20 @@ fn setup(mut commands: Commands) {
     println!("  - {} days per normal year", total_days);
     println!("  - {} days per leap year", total_days + total_leap_days);
     println!("\nEpoch:");
-    println!("  - Name: {}", fantasy_calendar.epoch.name);
-    println!("  - Starting year: {}", fantasy_calendar.epoch.start_year);
-    println!("\nTime progression: 1 in-game day = 60 real seconds");
+    println!("  - Name: {}", scifi_calendar.epoch.name);
+    println!("  - Starting year: {}", scifi_calendar.epoch.start_year);
+    println!("\nTime progression: 1 in-game day = 30 real seconds");
     println!("\nControls:");
     println!("  Space - Pause/Resume");
     println!("  +/-   - Speed Up/Down");
     println!("  R     - Reset clock");
     println!();
 
-    let calendar_clone = fantasy_calendar.clone();
-    commands.insert_resource(CalendarResource(calendar_clone));
-
-    // Create a clock with the fantasy calendar
-    // One in-game day passes every 60 real seconds
+    // Create a clock with the sci-fi calendar
+    // One in-game day passes every 30 real seconds (faster than the fantasy calendar example)
     let clock = InGameClock::new()
-        .with_calendar(fantasy_calendar)
-        .with_day_duration(60.0);
+        .with_calendar(scifi_calendar)
+        .with_day_duration(30.0);
 
     commands.insert_resource(clock);
 
@@ -117,7 +145,6 @@ fn handle_clock_events(mut events: MessageReader<ClockIntervalEvent>) {
 
 fn display_time(
     clock: Res<InGameClock>,
-    calendar: Res<CalendarResource>,
     mut query: Query<&mut Text, With<ClockText>>,
 ) {
     if clock.is_changed() || query.iter().next().is_some() {
@@ -127,21 +154,17 @@ fn display_time(
             let date = clock.format_date(None);
             let time = clock.format_time(None);
             
-            // Display using custom format with weekday, month names and era
+            // Display using custom format with weekday, month names and epoch
             let custom_format = clock.format_datetime(Some("%A, %E Year %Y, %B %d - %H:%M:%S"));
             
             // Get raw components
             let (year, month, day) = clock.current_date();
             let (hour, minute, second) = clock.current_time();
             
-            // Check if current year is a leap year using the calendar's method
-            let is_leap = calendar.0.is_leap_year(year);
-            let leap_years_expression = calendar.0.leap_years.clone();
-            
             let status = if clock.paused { "PAUSED" } else { "RUNNING" };
             
             text.0 = format!(
-                "=== Fantasy Calendar Clock ===\n\
+                "=== Sci-Fi Calendar Clock (Builder Pattern) ===\n\
                 \n\
                 Status:            {}\n\
                 \n\
@@ -150,11 +173,14 @@ fn display_time(
                 Date only:         {}\n\
                 Time only:         {}\n\
                 Components:        Year {}, Month {}, Day {} | {}:{:02}:{:02}\n\
-                Is leap year:      {}\n\
-                Leap years expression:      {}\n\
                 \n\
                 Speed:             {:.1}x\n\
                 Day duration:      {:.1}s\n\
+                \n\
+                Calendar Info:\n\
+                  100 minutes/hour, 10 hours/day, 6 days/week\n\
+                  13 months/year (365 days normal, 366 in leap years)\n\
+                  Leap year rule: Gregorian-style\n\
                 \n\
                 Controls:\n\
                   Space - Pause/Resume\n\
@@ -171,8 +197,6 @@ fn display_time(
                 hour,
                 minute,
                 second,
-                if is_leap { "Yes" } else { "No" },
-                leap_years_expression,
                 clock.speed,
                 clock.day_duration()
             );

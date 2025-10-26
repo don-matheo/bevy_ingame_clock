@@ -173,7 +173,7 @@ fn default_epoch() -> Epoch {
 ///
 /// This calendar system allows you to create fantasy or alternative calendar systems
 /// with custom time units, month lengths, and leap year rules. Unlike [`GregorianCalendar`],
-/// this stores explicit month and weekday names in the `months` and `weekday_names` fields
+/// this stores explicit month and weekday names in the `months` and `weekdays` fields
 /// which you can access directly.
 ///
 /// # Accessing Month and Weekday Names
@@ -192,7 +192,7 @@ fn default_epoch() -> Epoch {
 /// }
 ///
 /// // Access weekdays
-/// for weekday in &calendar.weekday_names {
+/// for weekday in &calendar.weekdays {
 ///     println!("Weekday: {}", weekday);
 /// }
 /// ```
@@ -222,7 +222,7 @@ pub struct CustomCalendar {
     pub months: Vec<Month>,
     /// Names of the weekdays.
     /// You can access these directly to retrieve weekday names.
-    pub weekday_names: Vec<String>,
+    pub weekdays: Vec<String>,
     /// Leap year expression: a boolean expression using `#` as year placeholder.
     /// Examples: `"false"`, `"# % 4 == 0"`, `"# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)"`
     #[serde(default = "default_leap_years")]
@@ -242,7 +242,7 @@ pub struct CustomCalendarBuilder {
     minutes_per_hour: Option<u32>,
     hours_per_day: Option<u32>,
     months: Vec<Month>,
-    weekday_names: Vec<String>,
+    weekdays: Vec<String>,
     leap_years: Option<String>,
     epoch: Option<Epoch>,
 }
@@ -279,13 +279,13 @@ impl CustomCalendarBuilder {
     
     /// Add a weekday name
     pub fn weekday(mut self, name: impl Into<String>) -> Self {
-        self.weekday_names.push(name.into());
+        self.weekdays.push(name.into());
         self
     }
     
     /// Set all weekday names at once
     pub fn weekdays(mut self, names: Vec<String>) -> Self {
-        self.weekday_names = names;
+        self.weekdays = names;
         self
     }
     
@@ -318,13 +318,13 @@ impl CustomCalendarBuilder {
         let epoch = self.epoch.unwrap_or_else(default_epoch);
         
         assert!(!self.months.is_empty(), "Must have at least one month");
-        assert!(!self.weekday_names.is_empty(), "Must have at least one weekday name");
+        assert!(!self.weekdays.is_empty(), "Must have at least one weekday name");
         
         CustomCalendar {
             minutes_per_hour,
             hours_per_day,
             months: self.months,
-            weekday_names: self.weekday_names,
+            weekdays: self.weekdays,
             leap_years,
             epoch,
         }
@@ -375,8 +375,8 @@ impl CustomCalendar {
     /// Get the weekday name for the current elapsed time
     fn get_weekday(&self, elapsed_seconds: f64) -> String {
         let total_days = (elapsed_seconds / self.seconds_per_day() as f64).floor() as i64;
-        let weekday_index = (total_days % self.weekday_names.len() as i64) as usize;
-        self.weekday_names[weekday_index].clone()
+        let weekday_index = (total_days % self.weekdays.len() as i64) as usize;
+        self.weekdays[weekday_index].clone()
     }
 }
 
@@ -390,7 +390,7 @@ impl Calendar for CustomCalendar {
     }
     
     fn seconds_per_week(&self) -> u32 {
-        self.seconds_per_day() * self.weekday_names.len() as u32
+        self.seconds_per_day() * self.weekdays.len() as u32
     }
     
     fn get_date(&self, elapsed_seconds: f64, _start_datetime: NaiveDateTime) -> (i32, u32, u32) {
@@ -757,7 +757,7 @@ mod tests {
         assert_eq!(calendar.minutes_per_hour, 20);
         assert_eq!(calendar.hours_per_day, 8);
         assert_eq!(calendar.months.len(), 3);
-        assert_eq!(calendar.weekday_names.len(), 5);
+        assert_eq!(calendar.weekdays.len(), 5);
         assert_eq!(calendar.leap_years, "# % 2 == 0");
         assert_eq!(calendar.epoch.name, "Age of Magic");
         assert_eq!(calendar.epoch.start_year, 1000);
@@ -786,7 +786,7 @@ mod tests {
             .build();
         
         assert_eq!(calendar.months.len(), 2);
-        assert_eq!(calendar.weekday_names.len(), 7);
+        assert_eq!(calendar.weekdays.len(), 7);
     }
     
     #[test]
@@ -821,8 +821,8 @@ mod tests {
         assert_eq!(calendar.hours_per_day, 24);
         assert_eq!(calendar.months.len(), 2);
         assert_eq!(calendar.months[0].name, "Frostmoon");
-        assert_eq!(calendar.weekday_names.len(), 2);
-        assert_eq!(calendar.weekday_names[0], "Moonday");
+        assert_eq!(calendar.weekdays.len(), 2);
+        assert_eq!(calendar.weekdays[0], "Moonday");
         assert_eq!(calendar.leap_years, "false");
     }
     

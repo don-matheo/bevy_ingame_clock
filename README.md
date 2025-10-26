@@ -239,7 +239,7 @@ fn setup(mut commands: Commands) {
             Month::new("Thawmoon", 21, 0),
             Month::new("Bloomtide", 19, 2),
         ])
-        .weekday_names(vec![
+        .weekdays(vec![
             "Moonday".to_string(),
             "Fireday".to_string(),
             "Waterday".to_string(),
@@ -292,7 +292,7 @@ Example RON file (`assets/fantasy_calendar.ron`):
         (name: "Thawmoon", days: 21, leap_days: 0),
         (name: "Bloomtide", days: 19, leap_days: 2),
     ],
-    weekday_names: ["Moonday", "Fireday", "Waterday", "Earthday", "Starday"],
+    weekdays: ["Moonday", "Fireday", "Waterday", "Earthday", "Starday"],
     leap_years: "# % 2 == 0",
     epoch: (name: "Age of Magic", start_year: 1000),
 )
@@ -313,7 +313,7 @@ Both approaches create identical `CustomCalendar` instances and work seamlessly 
   - `name`: Month name
   - `days`: Base number of days in the month
   - `leap_days`: Additional days added during leap years (allows distributing leap days across months)
-- `weekday_names`: Names for each day of the week. The number of weekday names determines the days per week. The first name in the list is day 0 of the week
+- `weekdays`: Names for each day of the week. The number of weekday names determines the days per week. The first name in the list is day 0 of the week
 - `epoch`: Epoch definition with:
   - `name`: Name of the epoch (e.g., "Age of Magic", "Common Era")
   - `start_year`: Starting year for the calendar system
@@ -470,13 +470,13 @@ Visual digital clock display, showing time in digital format with a date calenda
 - `+/-` - Speed Up/Down
 - `R` - Reset clock
 
-### Custom Calendar Example
+### Custom Calendar Example (RON Configuration)
 
 ```bash
 cargo run --example custom_calendar
 ```
 
-Demonstrates implementing and using a custom fantasy calendar system loaded from a RON file with:
+Demonstrates a custom fantasy calendar system loaded from a RON configuration file with:
 - 60 minutes per hour
 - 20 hours per day
 - 5 days per week (first day: Moonday)
@@ -488,6 +488,26 @@ Demonstrates implementing and using a custom fantasy calendar system loaded from
 - Custom weekday names (Moonday, Fireday, Waterday, etc.) - first name in list is day 0
 - Epoch definition: "Age of Magic" starting at year 1000
 - Interactive display showing leap year status
+
+**Controls:**
+- `Space` - Pause/Resume
+- `+/-` - Speed Up/Down
+- `R` - Reset clock
+
+### Custom Calendar Builder Example (Programmatic)
+
+```bash
+cargo run --example custom_calendar_builder
+```
+
+Demonstrates programmatically creating a custom sci-fi calendar using the `CustomCalendarBuilder` pattern:
+- 100 minutes per hour
+- 10 hours per day (shorter days on a faster-rotating planet)
+- 6 days per week (Solday, Lunaday, Marsday, etc.)
+- 13 months per year with uniform lengths
+- Gregorian-style leap year rule: `# % 4 == 0 && (# % 100 != 0 || # % 400 == 0)`
+- 365 days per normal year; 366 days per leap year
+- Epoch definition: "Galactic Standard Era" starting at year 2500
 
 **Controls:**
 - `Space` - Pause/Resume

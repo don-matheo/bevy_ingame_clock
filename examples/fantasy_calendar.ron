@@ -16,7 +16,7 @@
         (name: "Darkmoon", days: 21, leap_days: 0),
         (name: "Icemoon", days: 18, leap_days: 2),
     ],
-    weekday_names: [
+    weekdays: [
         "Moonday",
         "Fireday",
         "Waterday",
