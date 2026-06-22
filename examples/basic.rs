@@ -32,7 +32,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Text::new("In-game Clock Example\n\nControls:\nSpace: Pause/Resume\n+/-: Double/Halve Speed\n1-6: Set Day Duration\nR: Reset\n\nDate & Time: 0000-00-00 00:00:00"),
         TextFont {
-            font_size: 30.0,
+            font_size: FontSize::Px(30.0),
             ..default()
         },
         TextColor(Color::WHITE),

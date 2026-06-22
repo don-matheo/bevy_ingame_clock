@@ -64,7 +64,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Text::new("Clock Events Example\n\nControls:\nSpace: Pause/Resume\n+/-: Speed Up/Down\nR: Reset\n1-6: Toggle Events\n\nWatching for events..."),
         TextFont {
-            font_size: 20.0,
+            font_size: FontSize::Px(20.0),
             ..default()
         },
         TextColor(Color::WHITE),
