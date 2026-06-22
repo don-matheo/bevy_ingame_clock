@@ -66,7 +66,7 @@ fn setup(mut commands: Commands) {
         parent.spawn((
             Text::new(""),
             TextFont {
-                font_size: 100.0,
+                font_size: FontSize::Px(100.0),
                 ..default()
             },
             TextColor(Color::srgb(0.3, 0.8, 0.9)),
@@ -112,7 +112,7 @@ fn setup(mut commands: Commands) {
         parent.spawn((
             Text::new(""),
             TextFont {
-                font_size: 28.0,
+                font_size: FontSize::Px(28.0),
                 ..default()
             },
             TextColor(Color::srgb(0.3, 0.8, 0.9)),
@@ -124,7 +124,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Text::new("Digital Clock\n\nControls:\nSpace: Pause/Resume\n+/-: Speed Up/Down\nR: Reset"),
         TextFont {
-            font_size: 18.0,
+            font_size: FontSize::Px(18.0),
             ..default()
         },
         TextColor(Color::WHITE),
@@ -140,7 +140,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Text::new(""),
         TextFont {
-            font_size: 16.0,
+            font_size: FontSize::Px(16.0),
             ..default()
         },
         TextColor(Color::srgb(0.7, 0.7, 0.7)),
